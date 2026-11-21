@@ -9,6 +9,15 @@ export interface BoxCollider {
   hd: number;
 }
 
+export interface CameraBox {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+}
+
 export interface BuildingEntrance {
   roomId: RoomId;
   name: string;
@@ -35,6 +44,8 @@ export interface RoomInterior {
   guideRing: THREE.Mesh;
   guideChevrons: THREE.Group;
   deskCollider: BoxCollider;
+  roomColliders: BoxCollider[];
+  roomCameraBounds: CameraBox;
   roomHeaderSprite: THREE.Sprite;
   setRoomSign: (title: string, accentHex: number) => void;
 }
@@ -43,6 +54,7 @@ export interface CampusWorld {
   campusGroup: THREE.Group;
   roomGroup: THREE.Group;
   outdoorColliders: BoxCollider[];
+  outdoorCameraObstacles: CameraBox[];
   entrances: BuildingEntrance[];
   roomInterior: RoomInterior;
   dispose: () => void;
@@ -449,9 +461,9 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
     group.add(beam);
   });
 
-  // Consultation Desk (at z = -2.5)
+  // Consultation Desk (at z = -2.4)
   const deskGroup = new THREE.Group();
-  deskGroup.position.set(0, 0, -2.5);
+  deskGroup.position.set(0, 0, -2.4);
   const deskTopMat = new THREE.MeshStandardMaterial({ color: 0x8b5e3c, roughness: 0.48, metalness: 0.08 });
   const deskMetalMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.38, metalness: 0.55 });
 
@@ -504,9 +516,9 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
   deskGroup.add(deskTop, modestyPanel, clipboard, lampBase, lampStem, lampShade, nameplate);
   group.add(deskGroup);
 
-  // Desk Chair (at z = -3.55, facing +Z toward the patient)
+  // Desk Chair (at z = -3.65, facing +Z toward the patient with clean legroom)
   const chairGroup = new THREE.Group();
-  chairGroup.position.set(0, 0, -3.55);
+  chairGroup.position.set(0, 0, -3.65);
   const cushionMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.68, metalness: 0.05 });
 
   const basePole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.42, 10), deskMetalMat);
@@ -543,7 +555,7 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
 
   // Guided Target Ring & Animated Floating 3D Arrow above Chair
   const guideRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.95, 0.065, 10, 36),
+    new THREE.TorusGeometry(1.05, 0.065, 10, 36),
     new THREE.MeshStandardMaterial({
       color: 0x2563eb,
       emissive: 0x2563eb,
@@ -552,11 +564,11 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
     })
   );
   guideRing.rotation.x = Math.PI / 2;
-  guideRing.position.set(0, 0.05, -3.55);
+  guideRing.position.set(0, 0.05, -3.65);
   group.add(guideRing);
 
   const guideArrow = new THREE.Group();
-  guideArrow.position.set(0, 2.25, -3.55);
+  guideArrow.position.set(0, 2.25, -3.65);
   const arrowMat = new THREE.MeshStandardMaterial({
     color: 0x2563eb,
     emissive: 0x1d4ed8,
@@ -572,7 +584,7 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
   guideArrow.add(arrowTip, arrowShaft);
   group.add(guideArrow);
 
-  // Subtle floor directional chevrons from doorway side to chair
+  // Floor directional chevrons angled cleanly toward the desk chair
   const guideChevrons = new THREE.Group();
   const chevMat = new THREE.MeshStandardMaterial({
     color: 0x2563eb,
@@ -582,13 +594,16 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
     opacity: 0.72,
   });
   [
-    [3.2, 3.4],
-    [3.4, 0.6],
-    [2.8, -2.1],
-  ].forEach(([cx, cz]) => {
+    [3.2, 3.2, -0.32],
+    [3.0, 0.4, -0.52],
+    [2.1, -2.2, -0.78],
+  ].forEach(([cx, cz, yaw]) => {
     const dot = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.42, 3), chevMat);
+    dot.rotation.order = 'YXZ';
+    dot.rotation.y = yaw;
     dot.rotation.x = -Math.PI / 2;
-    dot.position.set(cx, 0.05, cz);
+    dot.scale.set(1, 1, 0.35);
+    dot.position.set(cx, 0.04, cz);
     guideChevrons.add(dot);
   });
   group.add(guideChevrons);
@@ -601,12 +616,35 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
     mat.needsUpdate = true;
   };
 
+  const deskCollider: BoxCollider = { x: 0, z: -2.4, hw: 1.42, hd: 0.58 };
+  const roomColliders: BoxCollider[] = [
+    deskCollider,
+    // Bookshelves
+    { x: -6.5, z: -5.8, hw: 1.15, hd: 0.3 },
+    { x: 6.5, z: -5.8, hw: 1.15, hd: 0.3 },
+    // Potted plants
+    { x: -7.8, z: -5.4, hw: 0.42, hd: 0.42 },
+    { x: 7.8, z: -5.4, hw: 0.42, hd: 0.42 },
+    { x: -7.6, z: 5.6, hw: 0.42, hd: 0.42 },
+    { x: 7.6, z: 5.6, hw: 0.42, hd: 0.42 },
+  ];
+
+  // Camera stays strictly inside room walls (x=±8.85, z=-6.35..7.35) and under beams (y=4.37)
+  const roomCameraBounds: CameraBox = {
+    minX: -8.35,
+    maxX: 8.35,
+    minY: 0.42,
+    maxY: 3.95,
+    minZ: -5.85,
+    maxZ: 6.85,
+  };
+
   return {
     group,
-    chairPos: new THREE.Vector3(0, 0, -3.55),
-    deskPos: new THREE.Vector3(0, 0, -2.5),
-    eyePos: new THREE.Vector3(0, 1.5, -3.38),
-    lookAtTarget: new THREE.Vector3(0, 1.38, -0.9),
+    chairPos: new THREE.Vector3(0, 0, -3.65),
+    deskPos: new THREE.Vector3(0, 0, -2.4),
+    eyePos: new THREE.Vector3(0, 1.48, -3.45),
+    lookAtTarget: new THREE.Vector3(0, 1.36, -0.95),
     patientSpot: new THREE.Vector3(0, 0, -0.95),
     patientExitSpot: new THREE.Vector3(6.2, 0, 3.8),
     queueSpots: [
@@ -619,7 +657,9 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
     guideArrow,
     guideRing,
     guideChevrons,
-    deskCollider: { x: 0, z: -2.5, hw: 1.48, hd: 0.72 },
+    deskCollider,
+    roomColliders,
+    roomCameraBounds,
     roomHeaderSprite,
     setRoomSign,
   };
@@ -671,12 +711,21 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
 
   // 4 Buildings + Entrances
   const outdoorColliders: BoxCollider[] = [];
+  const outdoorCameraObstacles: CameraBox[] = [];
   const entrances: BuildingEntrance[] = [];
 
   CAMPUS_ROOMS.forEach((room) => {
     const built = buildCompositeBuilding(room);
     campusGroup.add(built.group);
     outdoorColliders.push(built.collider);
+    outdoorCameraObstacles.push({
+      minX: room.x - 5.65,
+      maxX: room.x + 5.65,
+      minY: 0,
+      maxY: 6.75,
+      minZ: room.z - 4.65,
+      maxZ: room.z + 4.65,
+    });
 
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(1.45, 0.1, 10, 40),
@@ -788,8 +837,13 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
     const tz = Math.sin(angle) * radius;
     if (Math.abs(tx) < 6.8 || Math.abs(tz) < 6.8) continue;
     if (Math.abs(Math.abs(tx) - 14) < 7.6 && Math.abs(Math.abs(tz) - 14) < 6.6) continue;
+    // Keep trees clear of the perimeter fence line
+    if (Math.abs(Math.abs(tx) - 25.5) < 1.6 || Math.abs(Math.abs(tz) - 25.5) < 1.6) continue;
     const scale = 0.85 + ((i * 37) % 30) / 100;
     campusGroup.add(buildCompositeTree(tx, tz, scale, i));
+    if (Math.abs(tx) < 24.5 && Math.abs(tz) < 24.5) {
+      outdoorColliders.push({ x: tx, z: tz, hw: 0.42 * scale, hd: 0.42 * scale });
+    }
   }
 
   // Room Interior Group (hidden initially until entering a building)
@@ -801,6 +855,7 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
     campusGroup,
     roomGroup: roomInterior.group,
     outdoorColliders,
+    outdoorCameraObstacles,
     entrances,
     roomInterior,
     dispose: () => {

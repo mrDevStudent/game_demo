@@ -3,7 +3,12 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { buildCampusWorld, CampusWorld } from './campusGeometry';
+import {
+  BoxCollider,
+  buildCampusWorld,
+  CameraBox,
+  CampusWorld,
+} from './campusGeometry';
 import {
   createNpcGestureClips,
   NpcAnimationController,
@@ -164,6 +169,121 @@ function moveAndFace(
 function makeRotationOnlyClip(name: string, clip: THREE.AnimationClip): THREE.AnimationClip {
   const rotTracks = clip.tracks.filter((t) => !t.name.endsWith('.position'));
   return new THREE.AnimationClip(name, clip.duration, rotTracks);
+}
+
+function clampCameraInsideBox(
+  origin: THREE.Vector3,
+  camPos: THREE.Vector3,
+  bounds: CameraBox
+): void {
+  const vx = camPos.x - origin.x;
+  const vy = camPos.y - origin.y;
+  const vz = camPos.z - origin.z;
+  let tMax = 1;
+
+  if (vx > 1e-6) tMax = Math.min(tMax, (bounds.maxX - origin.x) / vx);
+  else if (vx < -1e-6) tMax = Math.min(tMax, (bounds.minX - origin.x) / vx);
+
+  if (vy > 1e-6) tMax = Math.min(tMax, (bounds.maxY - origin.y) / vy);
+  else if (vy < -1e-6) tMax = Math.min(tMax, (bounds.minY - origin.y) / vy);
+
+  if (vz > 1e-6) tMax = Math.min(tMax, (bounds.maxZ - origin.z) / vz);
+  else if (vz < -1e-6) tMax = Math.min(tMax, (bounds.minZ - origin.z) / vz);
+
+  const t = Math.max(0.08, Math.min(1, tMax));
+  camPos.set(origin.x + vx * t, origin.y + vy * t, origin.z + vz * t);
+  camPos.x = THREE.MathUtils.clamp(camPos.x, bounds.minX, bounds.maxX);
+  camPos.y = THREE.MathUtils.clamp(camPos.y, bounds.minY, bounds.maxY);
+  camPos.z = THREE.MathUtils.clamp(camPos.z, bounds.minZ, bounds.maxZ);
+}
+
+function clipCameraOutsideBoxes(
+  origin: THREE.Vector3,
+  camPos: THREE.Vector3,
+  obstacles: CameraBox[]
+): void {
+  const vx = camPos.x - origin.x;
+  const vy = camPos.y - origin.y;
+  const vz = camPos.z - origin.z;
+  let bestT = 1;
+
+  for (let i = 0; i < obstacles.length; i += 1) {
+    const b = obstacles[i];
+    let tMin = 0;
+    let tMax = bestT;
+
+    if (Math.abs(vx) < 1e-6) {
+      if (origin.x < b.minX || origin.x > b.maxX) continue;
+    } else {
+      let tx1 = (b.minX - origin.x) / vx;
+      let tx2 = (b.maxX - origin.x) / vx;
+      if (tx1 > tx2) {
+        const tmp = tx1;
+        tx1 = tx2;
+        tx2 = tmp;
+      }
+      tMin = Math.max(tMin, tx1);
+      tMax = Math.min(tMax, tx2);
+      if (tMin > tMax) continue;
+    }
+
+    if (Math.abs(vy) < 1e-6) {
+      if (origin.y < b.minY || origin.y > b.maxY) continue;
+    } else {
+      let ty1 = (b.minY - origin.y) / vy;
+      let ty2 = (b.maxY - origin.y) / vy;
+      if (ty1 > ty2) {
+        const tmp = ty1;
+        ty1 = ty2;
+        ty2 = tmp;
+      }
+      tMin = Math.max(tMin, ty1);
+      tMax = Math.min(tMax, ty2);
+      if (tMin > tMax) continue;
+    }
+
+    if (Math.abs(vz) < 1e-6) {
+      if (origin.z < b.minZ || origin.z > b.maxZ) continue;
+    } else {
+      let tz1 = (b.minZ - origin.z) / vz;
+      let tz2 = (b.maxZ - origin.z) / vz;
+      if (tz1 > tz2) {
+        const tmp = tz1;
+        tz1 = tz2;
+        tz2 = tmp;
+      }
+      tMin = Math.max(tMin, tz1);
+      tMax = Math.min(tMax, tz2);
+      if (tMin > tMax) continue;
+    }
+
+    if (tMin > 0 && tMin < bestT) {
+      bestT = Math.max(0.16, tMin - 0.04);
+    }
+  }
+
+  if (bestT < 1) {
+    camPos.set(origin.x + vx * bestT, origin.y + vy * bestT, origin.z + vz * bestT);
+  }
+  camPos.y = Math.max(0.45, camPos.y);
+}
+
+function resolveBoxColliders(
+  pos: { x: number; z: number },
+  colliders: BoxCollider[],
+  margin: number
+): void {
+  for (let i = 0; i < colliders.length; i += 1) {
+    const col = colliders[i];
+    const px = pos.x - col.x;
+    const pz = pos.z - col.z;
+    const ox = col.hw + margin - Math.abs(px);
+    const oz = col.hd + margin - Math.abs(pz);
+    if (ox > 0 && oz > 0) {
+      if (ox < oz) pos.x += Math.sign(px || 1) * ox;
+      else pos.z += Math.sign(pz || 1) * oz;
+    }
+  }
 }
 
 export const CampusCanvas: React.FC<CampusCanvasProps> = ({
@@ -442,6 +562,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     let camDist = 5.8;
     let fpYaw = 0;
     let fpPitch = 0;
+    let snapNextCamera = true;
 
     const keys: Record<string, boolean> = {};
     let dragPointerId: number | null = null;
@@ -598,6 +719,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       camYaw = 0;
       camPitch = 0.34;
       camDist = 5.8;
+      snapNextCamera = true;
 
       callbacksRef.current.onModeChange('outdoor', null);
       if (toastMsg) callbacksRef.current.onToast(toastMsg);
@@ -641,11 +763,12 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         scene.fog = new THREE.Fog(0xe6ecf2, 24, 65);
 
         player.x = 3.2;
-        player.z = 5.4;
-        player.heading = Math.PI;
-        camYaw = 0.12;
-        camPitch = 0.36;
-        camDist = 5.2;
+        player.z = 5.0;
+        player.heading = Math.PI * 0.9;
+        camYaw = -0.32;
+        camPitch = 0.34;
+        camDist = 4.2;
+        snapNextCamera = true;
 
         telemetry.events.push({
           t: Math.round(performance.now() - telemetry.t0),
@@ -805,6 +928,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       camDist = 5.8;
       fpYaw = 0;
       fpPitch = 0;
+      snapNextCamera = true;
 
       world.campusGroup.visible = true;
       world.roomGroup.visible = false;
@@ -882,7 +1006,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     };
     const onWheel = (e: WheelEvent) => {
       if (campusMode !== 'seated_first_person') {
-        camDist = THREE.MathUtils.clamp(camDist + e.deltaY * 0.004, 3.2, 12);
+        const maxDist = campusMode === 'room_walk' ? 6.2 : 12;
+        camDist = THREE.MathUtils.clamp(camDist + e.deltaY * 0.004, 2.4, maxDist);
       }
     };
 
@@ -1090,28 +1215,34 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
               if (campusMode === 'outdoor') {
                 player.x = THREE.MathUtils.clamp(player.x + dx * speed * dt, -24.2, 24.2);
                 player.z = THREE.MathUtils.clamp(player.z + dz * speed * dt, -24.2, 24.2);
-                world.outdoorColliders.forEach((col) => {
-                  const px = player.x - col.x;
-                  const pz = player.z - col.z;
-                  const ox = col.hw + 0.52 - Math.abs(px);
-                  const oz = col.hd + 0.52 - Math.abs(pz);
-                  if (ox > 0 && oz > 0) {
-                    if (ox < oz) player.x += Math.sign(px || 1) * ox;
-                    else player.z += Math.sign(pz || 1) * oz;
-                  }
-                });
+                resolveBoxColliders(player, world.outdoorColliders, 0.52);
+                player.x = THREE.MathUtils.clamp(player.x, -24.2, 24.2);
+                player.z = THREE.MathUtils.clamp(player.z, -24.2, 24.2);
               } else {
-                player.x = THREE.MathUtils.clamp(player.x + dx * speed * dt, -7.8, 7.8);
-                player.z = THREE.MathUtils.clamp(player.z + dz * speed * dt, -5.5, 6.2);
-                const deskCol = world.roomInterior.deskCollider;
-                const px = player.x - deskCol.x;
-                const pz = player.z - deskCol.z;
-                const ox = deskCol.hw + 0.45 - Math.abs(px);
-                const oz = deskCol.hd + 0.45 - Math.abs(pz);
-                if (ox > 0 && oz > 0) {
-                  if (ox < oz) player.x += Math.sign(px || 1) * ox;
-                  else player.z += Math.sign(pz || 1) * oz;
+                player.x = THREE.MathUtils.clamp(player.x + dx * speed * dt, -8.3, 8.3);
+                player.z = THREE.MathUtils.clamp(player.z + dz * speed * dt, -5.8, 6.8);
+                resolveBoxColliders(player, world.roomInterior.roomColliders, 0.38);
+
+                // Keep player from walking straight through queued NPCs
+                for (let i = 0; i < roomNpcs.length; i += 1) {
+                  const npc = roomNpcs[i];
+                  if (npc.state === 'done') continue;
+                  const nx = player.x - npc.group.position.x;
+                  const nz = player.z - npc.group.position.z;
+                  const nDist = Math.hypot(nx, nz);
+                  if (nDist < 0.72) {
+                    const push = 0.72 - nDist;
+                    if (nDist > 1e-4) {
+                      player.x += (nx / nDist) * push;
+                      player.z += (nz / nDist) * push;
+                    } else {
+                      player.x += 0.72;
+                    }
+                  }
                 }
+
+                player.x = THREE.MathUtils.clamp(player.x, -8.3, 8.3);
+                player.z = THREE.MathUtils.clamp(player.z, -5.8, 6.8);
               }
 
               telemetry.distance += Math.hypot(player.x - prevX, player.z - prevZ);
@@ -1144,7 +1275,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
                 currentPhase === 'playing' &&
                 !enteringRoom &&
                 roomNpcs.length > 0 &&
-                Math.hypot(player.x - chair.x, player.z - chair.z) < 1.2
+                Math.hypot(player.x - chair.x, player.z - chair.z) < 1.25
               ) {
                 campusMode = 'seated_first_person';
                 fpYaw = 0;
@@ -1164,16 +1295,34 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
               }
             }
 
+            const effectiveDist = campusMode === 'room_walk' ? Math.min(camDist, 6.2) : camDist;
             const tx = player.x;
             const ty = 1.35;
             const tz = player.z;
-            _camDesired.set(
-              tx + Math.sin(camYaw) * Math.cos(camPitch) * camDist,
-              Math.max(0.55, ty + Math.sin(camPitch) * camDist),
-              tz + Math.cos(camYaw) * Math.cos(camPitch) * camDist
-            );
             _lookTarget.set(tx, ty, tz);
-            camera.position.lerp(_camDesired, 1 - Math.exp(-8 * dt));
+            _camDesired.set(
+              tx + Math.sin(camYaw) * Math.cos(camPitch) * effectiveDist,
+              Math.max(0.55, ty + Math.sin(camPitch) * effectiveDist),
+              tz + Math.cos(camYaw) * Math.cos(camPitch) * effectiveDist
+            );
+
+            if (campusMode === 'room_walk') {
+              clampCameraInsideBox(_lookTarget, _camDesired, world.roomInterior.roomCameraBounds);
+            } else {
+              clipCameraOutsideBoxes(_lookTarget, _camDesired, world.outdoorCameraObstacles);
+            }
+
+            if (snapNextCamera) {
+              camera.position.copy(_camDesired);
+              snapNextCamera = false;
+            } else {
+              camera.position.lerp(_camDesired, 1 - Math.exp(-10 * dt));
+              if (campusMode === 'room_walk') {
+                clampCameraInsideBox(_lookTarget, camera.position, world.roomInterior.roomCameraBounds);
+              } else {
+                clipCameraOutsideBoxes(_lookTarget, camera.position, world.outdoorCameraObstacles);
+              }
+            }
             camera.lookAt(_lookTarget);
           }
         }
