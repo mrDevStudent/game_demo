@@ -81,19 +81,62 @@ interface CampusCanvasProps {
   onQuestComplete: (result: QuestResult) => void;
 }
 
-const MODEL_BASES = ['models/', 'public/models/'];
+const MODEL_BASES = Array.from(
+  new Set([
+    `${import.meta.env.BASE_URL || '/'}models/`,
+    '/models/',
+    'models/',
+    'public/models/',
+  ])
+);
+
+function inspectBinaryError(file: string, buf: ArrayBuffer): string | null {
+  if (buf.byteLength < 64) {
+    return `${file} is empty or truncated`;
+  }
+  const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(48, buf.byteLength)));
+  if (head.startsWith('version https://git-lfs.github.com')) {
+    return `${file} is a Git LFS pointer (enable Git LFS in Vercel or commit raw FBX)`;
+  }
+  if (head.trimStart().startsWith('<!') || head.trimStart().toLowerCase().startsWith('<html')) {
+    return `${file} missing on host (returned HTML)`;
+  }
+  return null;
+}
 
 async function fetchAssetBuffer(file: string): Promise<ArrayBuffer> {
   const encoded = encodeURIComponent(file);
+  let lastReason = 'not found';
   for (const base of MODEL_BASES) {
     try {
       const res = await fetch(`${base}${encoded}`);
-      if (res.ok) return await res.arrayBuffer();
-    } catch {
-      // Try next path
+      if (!res.ok) {
+        lastReason = `HTTP ${res.status}`;
+        continue;
+      }
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      if (contentType.includes('text/html')) {
+        lastReason = '404 HTML fallback';
+        continue;
+      }
+      const buf = await res.arrayBuffer();
+      const binaryErr = inspectBinaryError(file, buf);
+      if (binaryErr) {
+        if (binaryErr.includes('Git LFS')) {
+          throw new Error(binaryErr);
+        }
+        lastReason = binaryErr;
+        continue;
+      }
+      return buf;
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('Git LFS')) {
+        throw err;
+      }
+      lastReason = err instanceof Error ? err.message : 'network error';
     }
   }
-  throw new Error(`Unable to load 3D model asset: ${file}`);
+  throw new Error(`Failed loading ${file}: ${lastReason}`);
 }
 
 async function fetchAssetJson(file: string): Promise<Record<string, unknown>> {
@@ -101,7 +144,10 @@ async function fetchAssetJson(file: string): Promise<Record<string, unknown>> {
   for (const base of MODEL_BASES) {
     try {
       const res = await fetch(`${base}${encoded}`);
-      if (res.ok) return (await res.json()) as Record<string, unknown>;
+      if (!res.ok) continue;
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      if (contentType.includes('text/html')) continue;
+      return (await res.json()) as Record<string, unknown>;
     } catch {
       // Try next path
     }
@@ -436,7 +482,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
       const promise = (async () => {
         const buf = await fetchAssetBuffer(file);
-        const fbx = new FBXLoader().parse(buf, '');
+        const fbx = new FBXLoader().parse(buf, `${import.meta.env.BASE_URL || '/'}models/`);
         fbx.traverse((child) => {
           const mesh = child as THREE.Mesh;
           if (mesh.isMesh) {
@@ -458,7 +504,11 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         });
         npcLoadedSet.add(file);
         return fbx;
-      })();
+      })().catch((err) => {
+        // Never permanently cache a failed fetch/parse so room entry can retry cleanly
+        npcTemplateCache.delete(file);
+        throw err;
+      });
 
       npcTemplateCache.set(file, promise);
       return promise;
@@ -535,12 +585,20 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         }
         callbacksRef.current.onModelsLoaded();
 
-        // Preload the 10 custom NPC FBX files cleanly in the background
-        for (const npcFile of NPC_MODEL_FILES) {
-          if (disposed) break;
-          getNpcTemplate(npcFile).catch((err) => {
-            console.warn('Background NPC preload skipped:', npcFile, err);
-          });
+        // Preload NPC models sequentially on desktop only to avoid 73MB mobile/CDN congestion
+        const isCoarseMobile =
+          window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
+        if (!isCoarseMobile) {
+          void (async () => {
+            for (const npcFile of NPC_MODEL_FILES) {
+              if (disposed) break;
+              try {
+                await getNpcTemplate(npcFile);
+              } catch (err) {
+                console.warn('Background NPC preload skipped:', npcFile, err);
+              }
+            }
+          })();
         }
       } catch (err) {
         if (!disposed) {
@@ -629,13 +687,19 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       const doneCount = answeredByRoom[roomId].length;
       const remaining = room.questions.slice(doneCount);
 
-      const loadedTemplates = await Promise.all(
-        remaining.map((q) => getNpcTemplate(q.modelFile))
-      );
+      // Load unique models sequentially so mobile devices don't spike RAM/bandwidth on 5 large FBX files at once
+      const loadedMap = new Map<string, THREE.Group>();
+      for (const q of remaining) {
+        if (disposed || activeRoomId !== roomId) return;
+        if (!loadedMap.has(q.modelFile)) {
+          const tpl = await getNpcTemplate(q.modelFile);
+          loadedMap.set(q.modelFile, tpl);
+        }
+      }
       if (disposed || activeRoomId !== roomId) return;
 
       remaining.forEach((q, idx) => {
-        const baseTemplate = loadedTemplates[idx];
+        const baseTemplate = loadedMap.get(q.modelFile)!;
         const clonedModel = cloneSkeleton(baseTemplate) as THREE.Group;
         const npcScale = q.scale ?? 0.0175;
         clonedModel.scale.setScalar(npcScale);
@@ -784,7 +848,11 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         }
       } catch (err) {
         console.error('Failed to spawn room NPCs:', err);
-        callbacksRef.current.onToast('Failed to load room NPC models.');
+        const detail =
+          err instanceof Error && err.message
+            ? err.message
+            : 'Failed to load room NPC models.';
+        callbacksRef.current.onToast(detail);
         exitToOutdoor(roomId);
       } finally {
         enteringRoom = false;
