@@ -171,7 +171,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                 <strong>Procedures:</strong> After confirming your demographic details, you will guide a 3D avatar across a virtual school campus to collect three items (Notebook, Library Card, Lunch Pass) and deliver them to the Principal&apos;s Office.
               </p>
               <p>
-                <strong>Confidentiality &amp; Voluntary Participation:</strong> Providing your name is optional. All recorded movement coordinates, event timestamps, and demographic entries are packaged under a randomly generated 6-character participant code for local download and researcher review. Participation is completely voluntary and you may stop at any time.
+                <strong>Confidentiality &amp; Voluntary Participation:</strong> Providing your name is optional. All recorded movement coordinates, event timestamps, and demographic entries are packaged under a randomly generated 6-character participant code for researcher archiving and review. Participation is completely voluntary and you may stop at any time.
               </p>
             </div>
 

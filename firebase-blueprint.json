@@ -1,0 +1,131 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized researcher/administrator role record.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 160,
+          "description": "Administrator Google account email."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"],
+          "description": "Assigned role."
+        }
+      },
+      "required": ["email", "role"]
+    },
+    "QuestSubmission": {
+      "title": "QuestSubmission",
+      "description": "Archived Campus Quest spatial navigation and 20-item questionnaire session record. Supports creation by participants and archival/editing by admins; deletion is forbidden.",
+      "type": "object",
+      "properties": {
+        "participant": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 12,
+          "pattern": "^[A-Z0-9]+$",
+          "description": "Generated 6-character participant code."
+        },
+        "demographics": {
+          "type": "object",
+          "description": "Participant demographic and consent snapshot."
+        },
+        "character": {
+          "type": "string",
+          "enum": ["female", "male"],
+          "description": "Selected 3D character avatar."
+        },
+        "durationMs": {
+          "type": "number",
+          "description": "Total quest completion duration in milliseconds."
+        },
+        "totalAnswered": {
+          "type": "number",
+          "description": "Total questionnaires answered (20 on completion)."
+        },
+        "roomOrder": {
+          "type": "array",
+          "description": "Order in which the 4 campus rooms were visited."
+        },
+        "answers": {
+          "type": "array",
+          "description": "List of 20 recorded questionnaire responses."
+        },
+        "distance": {
+          "type": "number",
+          "description": "Total distance walked in meters."
+        },
+        "moveTimeMs": {
+          "type": "number",
+          "description": "Active walking duration in milliseconds."
+        },
+        "events": {
+          "type": "array",
+          "description": "Timestamped navigation and questionnaire events."
+        },
+        "samples": {
+          "type": "array",
+          "description": "1Hz spatial trajectory coordinates {t, x, z}."
+        },
+        "archiveStatus": {
+          "type": "string",
+          "enum": ["active", "archived"],
+          "description": "Archive state managed by admin."
+        },
+        "adminNotes": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Researcher annotations edited in the Admin Dashboard."
+        },
+        "editedBy": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Email of the admin who last edited this record."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-updated timestamp."
+        }
+      },
+      "required": [
+        "participant",
+        "demographics",
+        "character",
+        "durationMs",
+        "totalAnswered",
+        "roomOrder",
+        "answers",
+        "distance",
+        "moveTimeMs",
+        "events",
+        "samples",
+        "archiveStatus",
+        "adminNotes",
+        "editedBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Administrator allowlist documents keyed by Firebase Auth UID."
+    },
+    "/questSubmissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/QuestSubmission" },
+      "description": "Persistent archive of completed Campus Quest participant sessions."
+    }
+  }
+}

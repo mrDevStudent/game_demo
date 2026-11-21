@@ -1,0 +1,162 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Default-deny catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAdminEmail() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'boringassworld@gmail.com';
+    }
+
+    function isAdmin() {
+      return isVerifiedAdminEmail()
+        || (isSignedIn()
+          && request.auth.token.email_verified == true
+          && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isValidDemographics(d) {
+      return d is map
+        && d.keys().hasAll(['name', 'age', 'gender', 'section', 'consented', 'consentTimestamp'])
+        && d.keys().hasOnly(['name', 'age', 'gender', 'section', 'consented', 'consentTimestamp'])
+        && d.name is string && d.name.size() <= 80
+        && d.age is number && d.age >= 7 && d.age <= 99
+        && (d.gender == 'female' || d.gender == 'male')
+        && d.section is string && d.section.size() >= 1 && d.section.size() <= 60
+        && d.consented == true
+        && d.consentTimestamp is string && d.consentTimestamp.size() >= 10 && d.consentTimestamp.size() <= 40;
+    }
+
+    function isValidSubmissionPayload(data) {
+      return data.keys().hasAll([
+          'participant',
+          'demographics',
+          'character',
+          'durationMs',
+          'totalAnswered',
+          'roomOrder',
+          'answers',
+          'distance',
+          'moveTimeMs',
+          'events',
+          'samples',
+          'archiveStatus',
+          'adminNotes',
+          'editedBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'participant',
+          'demographics',
+          'character',
+          'durationMs',
+          'totalAnswered',
+          'roomOrder',
+          'answers',
+          'distance',
+          'moveTimeMs',
+          'events',
+          'samples',
+          'archiveStatus',
+          'adminNotes',
+          'editedBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.participant is string
+        && data.participant.size() >= 6
+        && data.participant.size() <= 12
+        && data.participant.matches('^[A-Z0-9]+$')
+        && isValidDemographics(data.demographics)
+        && (data.character == 'female' || data.character == 'male')
+        && data.durationMs is number && data.durationMs >= 0 && data.durationMs <= 7200000
+        && data.totalAnswered is number && data.totalAnswered >= 1 && data.totalAnswered <= 20
+        && data.roomOrder is list && data.roomOrder.size() >= 1 && data.roomOrder.size() <= 4
+        && data.roomOrder[0] is string
+        && data.answers is list && data.answers.size() >= 1 && data.answers.size() <= 20
+        && data.answers[0] is map
+        && data.distance is number && data.distance >= 0 && data.distance <= 50000
+        && data.moveTimeMs is number && data.moveTimeMs >= 0 && data.moveTimeMs <= 7200000
+        && data.events is list && data.events.size() <= 500
+        && (data.events.size() == 0 || data.events[0] is map)
+        && data.samples is list && data.samples.size() <= 1500
+        && (data.samples.size() == 0 || data.samples[0] is map)
+        && (data.archiveStatus == 'active' || data.archiveStatus == 'archived')
+        && data.adminNotes is string && data.adminNotes.size() <= 1000
+        && data.editedBy is string && data.editedBy.size() <= 160
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // 3. Admins allowlist (read own marker only; writes disabled from client)
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // 4. Quest Submissions Archive (participants may create; only verified admin may read/edit/archive; NO delete)
+    match /questSubmissions/{submissionId} {
+      allow get: if isValidId(submissionId) && isAdmin();
+      allow list: if isVerifiedAdminEmail();
+
+      allow create: if isValidId(submissionId)
+        && isValidSubmissionPayload(incoming())
+        && incoming().archiveStatus == 'active'
+        && incoming().adminNotes == ''
+        && incoming().editedBy == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(submissionId)
+        && isAdmin()
+        && isValidSubmissionPayload(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'demographics',
+          'character',
+          'answers',
+          'archiveStatus',
+          'adminNotes',
+          'editedBy',
+          'updatedAt'
+        ])
+        && incoming().participant == existing().participant
+        && incoming().durationMs == existing().durationMs
+        && incoming().totalAnswered == existing().totalAnswered
+        && incoming().roomOrder == existing().roomOrder
+        && incoming().answers.size() == existing().answers.size()
+        && incoming().distance == existing().distance
+        && incoming().moveTimeMs == existing().moveTimeMs
+        && incoming().events == existing().events
+        && incoming().samples == existing().samples
+        && incoming().createdAt == existing().createdAt
+        && incoming().editedBy == request.auth.token.email
+        && incoming().updatedAt == request.time;
+
+      // Strict No-Delete Policy: not even admin can delete archive records
+      allow delete: if false;
+    }
+  }
+}

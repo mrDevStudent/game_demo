@@ -8,6 +8,8 @@ export type CampusMode = 'outdoor' | 'room_walk' | 'seated_first_person';
 
 export type OptionLetter = 'A' | 'B' | 'C' | 'D';
 
+export type ArchiveStatus = 'active' | 'archived';
+
 export interface DemographicsData {
   name: string;
   age: number;
@@ -76,6 +78,12 @@ export interface TelemetryEvent {
   section?: string;
 }
 
+export interface SpatialSample {
+  t: number;
+  x: number;
+  z: number;
+}
+
 export interface QuestResult {
   participant: string;
   demographics: {
@@ -95,4 +103,31 @@ export interface QuestResult {
   moveTimeMs: number;
   events: TelemetryEvent[];
   samples: [number, number, number][];
+}
+
+export interface QuestArchiveRecord {
+  id: string;
+  participant: string;
+  demographics: {
+    name: string;
+    age: number;
+    gender: GenderOption;
+    section: string;
+    consented: boolean;
+    consentTimestamp: string;
+  };
+  character: GenderOption;
+  durationMs: number;
+  totalAnswered: number;
+  roomOrder: RoomId[];
+  answers: QuestionnaireAnswer[];
+  distance: number;
+  moveTimeMs: number;
+  events: TelemetryEvent[];
+  samples: SpatialSample[];
+  archiveStatus: ArchiveStatus;
+  adminNotes: string;
+  editedBy: string;
+  createdAtMs: number;
+  updatedAtMs: number;
 }
