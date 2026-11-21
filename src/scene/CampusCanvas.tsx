@@ -1094,8 +1094,19 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           activeRig.group.position.set(0, 0, 0);
           activeRig.group.rotation.y = currentPhase === 'landing' ? Math.sin(nowPerf * 0.0006) * 0.32 : 0;
 
-          const isWideDesktop = (container.clientWidth || window.innerWidth) >= 1024;
-          const offsetX = currentPhase === 'landing' && isWideDesktop ? -1.45 : 0;
+          const vw = container.clientWidth || window.innerWidth;
+          const vh = container.clientHeight || window.innerHeight;
+          const isWideDesktop = vw >= 1024;
+          const isLandscapeViewport = vw > vh;
+          let offsetX = 0;
+          if (currentPhase === 'landing') {
+            if (isWideDesktop) {
+              offsetX = -1.45;
+            } else if (isLandscapeViewport) {
+              const aspect = vw / Math.max(1, vh);
+              offsetX = -Math.min(1.65, Math.max(1.25, aspect * 0.78));
+            }
+          }
           _camDesired.set(offsetX, 1.55, 4.75);
           _lookTarget.set(offsetX, 1.05, 0);
           camera.position.lerp(_camDesired, 1 - Math.exp(-6 * dt));

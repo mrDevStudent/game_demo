@@ -91,12 +91,31 @@ export default function App() {
       const el = document.documentElement as HTMLElement & {
         webkitRequestFullscreen?: () => Promise<void>;
       };
+      const orientation = window.screen?.orientation as
+        | (ScreenOrientation & { lock?: (type: string) => Promise<void>; unlock?: () => void })
+        | undefined;
+
       if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+        try {
+          orientation?.unlock?.();
+        } catch {
+          // Ignore unsupported orientation unlock
+        }
         (doc.exitFullscreen || doc.webkitExitFullscreen)?.call(doc);
       } else {
         const req = (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
-        if (req && typeof req.catch === 'function') {
-          req.catch(() => showToast('Fullscreen not available here'));
+        const isTouchOrNarrow =
+          window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
+        if (req && typeof req.then === 'function') {
+          req
+            .then(() => {
+              if (isTouchOrNarrow && orientation?.lock) {
+                orientation.lock('landscape').catch(() => {
+                  // iOS Safari / desktop browsers disallow programmatic lock
+                });
+              }
+            })
+            .catch(() => showToast('Fullscreen not available here'));
         }
       }
     } catch {
@@ -107,7 +126,15 @@ export default function App() {
   useEffect(() => {
     const onFullscreenChange = () => {
       const doc = document as Document & { webkitFullscreenElement?: Element };
-      setIsFullscreen(Boolean(doc.fullscreenElement || doc.webkitFullscreenElement));
+      const active = Boolean(doc.fullscreenElement || doc.webkitFullscreenElement);
+      setIsFullscreen(active);
+      if (!active) {
+        try {
+          window.screen?.orientation?.unlock?.();
+        } catch {
+          // Ignore unsupported orientation unlock
+        }
+      }
     };
     const onVisibilityChange = () => {
       soundEngine.handleVisibilityChange(document.hidden);
@@ -260,44 +287,42 @@ export default function App() {
           onQuestComplete={handleQuestComplete}
         />
 
-        {/* Top-Right Global Controls (Admin, Audio, Fullscreen) on Non-Playing Phases */}
-        {phase !== 'playing' && (
-          <div className="fixed right-3 top-3 sm:right-4 sm:top-4 z-30 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                soundEngine.playSfx('click');
-                setAdminOpen(true);
-              }}
-              className="h-10 px-3.5 flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
-            >
-              <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>Admin</span>
-            </button>
+        {/* Top-Right Global Controls (Admin, Audio, Fullscreen) */}
+        <div className="fixed right-3 top-3 sm:right-4 sm:top-4 z-30 flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playSfx('click');
+              setAdminOpen(true);
+            }}
+            className="h-10 px-2.5 sm:px-3.5 flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
+          >
+            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>Admin</span>
+          </button>
 
+          <button
+            type="button"
+            onClick={toggleMute}
+            title={muted ? 'Unmute audio (M)' : 'Mute audio (M)'}
+            aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+            className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/95 border border-slate-200 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+
+          {fullscreenSupported && (
             <button
               type="button"
-              onClick={toggleMute}
-              title={muted ? 'Unmute audio (M)' : 'Mute audio (M)'}
-              aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Exit fullscreen (F)' : 'Enter fullscreen (F)'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/95 border border-slate-200 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors"
             >
-              {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-
-            {fullscreenSupported && (
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                title={isFullscreen ? 'Exit fullscreen (F)' : 'Enter fullscreen (F)'}
-                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/95 border border-slate-200 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors"
-              >
-                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Phase 1: Landing Page + Demographics & Informed Consent */}
         {phase === 'landing' && (
@@ -333,12 +358,7 @@ export default function App() {
               elapsedMs={elapsedMs}
               demographics={demographics}
               toastMessage={toastMessage}
-              muted={muted}
-              isFullscreen={isFullscreen}
-              fullscreenSupported={fullscreenSupported}
               joystickRef={joystickRef}
-              onToggleMute={toggleMute}
-              onToggleFullscreen={toggleFullscreen}
               onLeaveRoom={handleLeaveRoom}
             />
 

@@ -53,24 +53,24 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-start p-4 sm:p-6 lg:p-10 pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-[520px] max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl bg-white shadow-xl border border-slate-200/90 p-6 sm:p-8 text-slate-900">
-        <div className="space-y-2 mb-6">
-          <p className="text-xs font-medium text-slate-500">
+    <div className="fixed inset-0 z-20 flex items-center justify-start p-3 sm:p-4 lg:p-10 pointer-events-none">
+      <div className="pointer-events-auto w-full max-w-[520px] landscape:max-w-[46vw] lg:landscape:max-w-[520px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] lg:max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl bg-white shadow-xl border border-slate-200/90 p-4 sm:p-5 lg:p-8 text-slate-900">
+        <div className="space-y-1 lg:space-y-2 mb-3.5 lg:mb-6">
+          <p className="text-[11px] lg:text-xs font-medium text-slate-500">
             Campus Spatial Navigation Study · 3–5 min · Anonymous Export
           </p>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="font-display text-lg sm:text-xl lg:text-3xl font-bold tracking-tight text-slate-900">
             Campus Quest Simulator
           </h1>
-          <p className="text-sm text-slate-600 leading-relaxed">
+          <p className="text-xs lg:text-sm text-slate-600 leading-relaxed">
             Complete the brief participant intake and informed consent below to enter the 3D campus navigation task.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-3 lg:space-y-4" noValidate>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 lg:gap-4">
             <div className="sm:col-span-2">
-              <label htmlFor="demo-name" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="demo-name" className="block text-xs font-semibold text-slate-700 mb-1 lg:mb-1.5">
                 Name <span className="font-normal text-slate-400">(Optional)</span>
               </label>
               <input
@@ -80,12 +80,12 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter your name or leave blank"
                 maxLength={80}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 lg:px-3.5 lg:py-2.5 text-xs lg:text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
               />
             </div>
 
             <div>
-              <label htmlFor="demo-age" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="demo-age" className="block text-xs font-semibold text-slate-700 mb-1 lg:mb-1.5">
                 Age <span className="text-rose-600">*</span>
               </label>
               <input
@@ -100,12 +100,12 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                 }}
                 placeholder="e.g. 19"
                 required
-                className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-mono-tabular text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 lg:px-3.5 lg:py-2.5 text-xs lg:text-sm font-mono-tabular text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
               />
             </div>
 
             <div>
-              <label htmlFor="demo-section" className="block text-xs font-semibold text-slate-700 mb-1.5">
+              <label htmlFor="demo-section" className="block text-xs font-semibold text-slate-700 mb-1 lg:mb-1.5">
                 Section <span className="text-rose-600">*</span>
               </label>
               <input
@@ -119,13 +119,13 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                 placeholder="e.g. BSCS 3A / STEM-11"
                 maxLength={60}
                 required
-                className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 lg:px-3.5 lg:py-2.5 text-xs lg:text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"
               />
             </div>
           </div>
 
           <div>
-            <span className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <span className="block text-xs font-semibold text-slate-700 mb-1 lg:mb-1.5">
               Gender <span className="text-rose-600">*</span>
             </span>
             <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 border border-slate-200">
@@ -136,7 +136,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                     key={option}
                     type="button"
                     onClick={() => onGenderChange(option)}
-                    className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap ${
+                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 lg:px-4 lg:py-2.5 text-xs lg:text-sm font-semibold transition-colors whitespace-nowrap ${
                       active
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'text-slate-700 hover:bg-white/70 hover:text-slate-900'
@@ -148,19 +148,19 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                 );
               })}
             </div>
-            <p className="mt-1.5 text-xs text-slate-500">
+            <p className="mt-1 lg:mt-1.5 text-[11px] lg:text-xs text-slate-500">
               Automatically assigns the {selectedGender} 3D character model shown in the campus preview.
             </p>
           </div>
 
           <div className="pt-2 border-t border-slate-200">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1.5 lg:mb-2">
               <FileText className="w-4 h-4 text-slate-600 shrink-0" />
               <h2 className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
                 Informed Consent Letter
               </h2>
             </div>
-            <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-600 leading-relaxed space-y-2">
+            <div className="max-h-24 lg:max-h-36 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 lg:p-3.5 text-xs text-slate-600 leading-relaxed space-y-2">
               <p className="font-semibold text-slate-800">
                 Participant Consent for Spatial Navigation Simulation Study
               </p>
@@ -175,7 +175,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
               </p>
             </div>
 
-            <label className="mt-3 flex items-start gap-2.5 cursor-pointer select-none">
+            <label className="mt-2.5 lg:mt-3 flex items-start gap-2.5 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={consented}
@@ -203,7 +203,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
           <button
             type="submit"
             disabled={!modelsLoaded || Boolean(modelsError)}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 lg:px-5 lg:py-3 text-xs lg:text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
           >
             {!modelsLoaded && !modelsError ? (
               <>
