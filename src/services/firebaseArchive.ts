@@ -37,7 +37,10 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
-export const ADMIN_EMAIL = 'boringassworld@gmail.com';
+export const ADMIN_EMAILS: readonly string[] = [
+  'boringassworld@gmail.com',
+  'emmanuelroberttenorio@gmail.com',
+];
 const COLLECTION_NAME = 'questSubmissions';
 
 export enum OperationType {
@@ -119,8 +122,9 @@ export async function signOutAdmin(): Promise<void> {
 }
 
 export async function checkIsAdminUser(user: User | null): Promise<boolean> {
-  if (!user || !user.emailVerified) return false;
-  if (user.email === ADMIN_EMAIL) return true;
+  if (!user || !user.emailVerified || !user.email) return false;
+  const normalized = user.email.trim().toLowerCase();
+  if (ADMIN_EMAILS.includes(normalized)) return true;
   try {
     const snap = await getDoc(doc(db, 'admins', user.uid));
     return snap.exists();

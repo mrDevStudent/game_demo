@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { CAMPUS_ROOMS } from '../data/questionnaires';
 import {
-  ADMIN_EMAIL,
   checkIsAdminUser,
   signInAdminWithGoogle,
   signOutAdmin,
@@ -58,6 +57,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
   const [isAdmin, setIsAdmin] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   const [records, setRecords] = useState<QuestArchiveRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
@@ -181,12 +182,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
   const handleSignIn = async () => {
     setAuthBusy(true);
     setAuthError(null);
+    setUnauthorizedDomain(null);
     try {
       await signInAdminWithGoogle();
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Google Sign-In failed.');
+      const msg = err instanceof Error ? err.message : 'Google Sign-In failed.';
+      if (msg.includes('auth/unauthorized-domain')) {
+        setUnauthorizedDomain(typeof window !== 'undefined' ? window.location.hostname : '');
+      }
+      setAuthError(msg);
     } finally {
       setAuthBusy(false);
+    }
+  };
+
+  const handleCopyDomain = async () => {
+    if (!unauthorizedDomain) return;
+    try {
+      await navigator.clipboard.writeText(unauthorizedDomain);
+      setCopiedDomain(true);
+      window.setTimeout(() => setCopiedDomain(false), 2000);
+    } catch {
+      // Clipboard unavailable
     }
   };
 
@@ -371,8 +388,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
                 </p>
               </div>
               {authError && (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                  {authError}
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 text-left space-y-2">
+                  <p className="font-semibold">{authError}</p>
+                  {unauthorizedDomain && (
+                    <div className="rounded-md bg-white border border-rose-200 p-2.5 text-[11px] text-slate-700 space-y-1.5">
+                      <p>
+                        External hosting domains (like Vercel) must be allowlisted in{' '}
+                        <strong>Firebase Console → Authentication → Settings → Authorized domains</strong>:
+                      </p>
+                      <div className="flex items-center justify-between gap-2 rounded bg-slate-100 px-2 py-1">
+                        <code className="font-mono-tabular font-semibold text-slate-900 truncate">
+                          {unauthorizedDomain}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={handleCopyDomain}
+                          className="inline-flex items-center gap-1 rounded bg-white border border-slate-300 px-2 py-0.5 text-[10.5px] font-semibold text-slate-700 hover:bg-slate-50 shrink-0"
+                        >
+                          {copiedDomain ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                          <span>{copiedDomain ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               <button
@@ -397,7 +439,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
                 Access Restricted
               </h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Signed in as <strong className="text-slate-900">{authUser.email}</strong>, which is not authorized for admin archive access ({ADMIN_EMAIL}).
+                Signed in as <strong className="text-slate-900">{authUser.email}</strong>, which does not have administrator archive permissions.
               </p>
               <button
                 type="button"
