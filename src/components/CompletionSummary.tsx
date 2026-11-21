@@ -25,8 +25,8 @@ export const CompletionSummary: React.FC<CompletionSummaryProps> = ({
   onRestart,
 }) => {
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center p-4 pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl bg-white shadow-xl border border-slate-200 p-6 sm:p-7 text-slate-900">
+    <div className="fixed inset-0 z-20 flex items-center justify-center p-3 sm:p-4 pointer-events-none">
+      <div className="pointer-events-auto w-full max-w-xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-white shadow-xl border border-slate-200 p-4 sm:p-6 lg:p-7 text-slate-900">
         <div className="text-center mb-5">
           <p className="text-xs font-medium text-emerald-700 mb-1">All 4 Rooms Completed</p>
           <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900">

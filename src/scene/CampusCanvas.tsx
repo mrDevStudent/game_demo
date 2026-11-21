@@ -475,13 +475,36 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     const npcLoadedSet = new Set<string>();
 
     let disposed = false;
+    let enteringRoom = false;
 
-    const getNpcTemplate = (file: string): Promise<THREE.Group> => {
+    const sleepMs = (ms: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, ms);
+      });
+
+    const waitForIdleSlot = () =>
+      new Promise<void>((resolve) => {
+        const win = window as Window & {
+          requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+        };
+        if (win.requestIdleCallback) {
+          win.requestIdleCallback(() => resolve(), { timeout: 500 });
+        } else {
+          window.requestAnimationFrame(() => window.setTimeout(resolve, 16));
+        }
+      });
+
+    const getNpcTemplate = (file: string, softYield = false): Promise<THREE.Group> => {
       const existing = npcTemplateCache.get(file);
       if (existing) return existing;
 
       const promise = (async () => {
         const buf = await fetchAssetBuffer(file);
+        if (disposed) throw new Error('Cancelled');
+        if (softYield) {
+          await waitForIdleSlot();
+          if (disposed) throw new Error('Cancelled');
+        }
         const fbx = new FBXLoader().parse(buf, `${import.meta.env.BASE_URL || '/'}models/`);
         fbx.traverse((child) => {
           const mesh = child as THREE.Mesh;
@@ -585,21 +608,28 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         }
         callbacksRef.current.onModelsLoaded();
 
-        // Preload NPC models sequentially on desktop only to avoid 73MB mobile/CDN congestion
-        const isCoarseMobile =
-          window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 1024;
-        if (!isCoarseMobile) {
-          void (async () => {
-            for (const npcFile of NPC_MODEL_FILES) {
-              if (disposed) break;
-              try {
-                await getNpcTemplate(npcFile);
-              } catch (err) {
-                console.warn('Background NPC preload skipped:', npcFile, err);
-              }
+        // Softly preload all NPC models 1-by-1 while participant fills demographics/briefing
+        void (async () => {
+          await sleepMs(700);
+          for (const npcFile of NPC_MODEL_FILES) {
+            if (disposed) break;
+            while (enteringRoom && !disposed) {
+              await sleepMs(250);
             }
-          })();
-        }
+            if (disposed) break;
+            if (npcLoadedSet.has(npcFile) || npcTemplateCache.has(npcFile)) {
+              continue;
+            }
+            try {
+              await getNpcTemplate(npcFile, true);
+            } catch (err) {
+              console.warn('Soft NPC preload skipped:', npcFile, err);
+            }
+            if (disposed) break;
+            await sleepMs(320);
+            await waitForIdleSlot();
+          }
+        })();
       } catch (err) {
         if (!disposed) {
           const msg = err instanceof Error ? err.message : 'Failed to load 3D character models.';
@@ -613,7 +643,6 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     let campusMode: CampusMode = 'outdoor';
     let activeRoomId: RoomId | null = null;
     let reenterCooldownUntil = 0;
-    let enteringRoom = false;
 
     let camYaw = 0;
     let camPitch = 0.34;
