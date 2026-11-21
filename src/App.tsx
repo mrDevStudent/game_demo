@@ -1,0 +1,325 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Maximize2, Minimize2, Volume2, VolumeX } from 'lucide-react';
+import { CampusCanvas, JoystickInput } from './scene/CampusCanvas';
+import { DemographicsLanding } from './components/DemographicsLanding';
+import { BriefingOverlay } from './components/BriefingOverlay';
+import { GameplayHud } from './components/GameplayHud';
+import { QuestionnaireOverlay } from './components/QuestionnaireOverlay';
+import { CompletionSummary } from './components/CompletionSummary';
+import { soundEngine } from './audio/soundEngine';
+import { TOTAL_QUESTIONNAIRES } from './data/questionnaires';
+import {
+  CampusMode,
+  DemographicsData,
+  GenderOption,
+  OptionLetter,
+  PatientQuestion,
+  QuestResult,
+  RoomId,
+  RoomProgress,
+  SimPhase,
+} from './types';
+
+export default function App() {
+  const [phase, setPhase] = useState<SimPhase>('landing');
+  const [selectedGender, setSelectedGender] = useState<GenderOption>('female');
+  const [demographics, setDemographics] = useState<DemographicsData | null>(null);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  const [rooms, setRooms] = useState<RoomProgress[]>([]);
+  const [campusMode, setCampusMode] = useState<CampusMode>('outdoor');
+  const [activeRoomId, setActiveRoomId] = useState<RoomId | null>(null);
+  const [activeQuestion, setActiveQuestion] = useState<PatientQuestion | null>(null);
+  const [roomCounter, setRoomCounter] = useState<{
+    roomName: string;
+    current: number;
+    total: number;
+  } | null>(null);
+
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [result, setResult] = useState<QuestResult | null>(null);
+  const [sessionResetKey, setSessionResetKey] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const joystickRef = useRef<JoystickInput>({ active: false, x: 0, y: 0 });
+  const submitAnswerRef = useRef<((option: OptionLetter) => void) | null>(null);
+  const leaveRoomRef = useRef<(() => void) | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const docEl = typeof document !== 'undefined' ? document.documentElement : null;
+  const fullscreenSupported = Boolean(
+    docEl &&
+      (docEl.requestFullscreen ||
+        (docEl as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> })
+          .webkitRequestFullscreen)
+  );
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 2600);
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setMuted((prev) => {
+      const next = !prev;
+      soundEngine.setMuted(next);
+      return next;
+    });
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    try {
+      const doc = document as Document & {
+        webkitFullscreenElement?: Element;
+        webkitExitFullscreen?: () => Promise<void>;
+      };
+      const el = document.documentElement as HTMLElement & {
+        webkitRequestFullscreen?: () => Promise<void>;
+      };
+      if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+        (doc.exitFullscreen || doc.webkitExitFullscreen)?.call(doc);
+      } else {
+        const req = (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+        if (req && typeof req.catch === 'function') {
+          req.catch(() => showToast('Fullscreen not available here'));
+        }
+      }
+    } catch {
+      showToast('Fullscreen not available here');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element };
+      setIsFullscreen(Boolean(doc.fullscreenElement || doc.webkitFullscreenElement));
+    };
+    const onVisibilityChange = () => {
+      soundEngine.handleVisibilityChange(document.hidden);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
+      ) {
+        return;
+      }
+      if (e.code === 'KeyM') toggleMute();
+      if (e.code === 'KeyF' && fullscreenSupported) toggleFullscreen();
+    };
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [fullscreenSupported, toggleFullscreen, toggleMute]);
+
+  const handleModelsLoaded = useCallback(() => {
+    setModelsLoaded(true);
+    setModelsError(null);
+  }, []);
+
+  const handleModelsError = useCallback((err: string) => {
+    setModelsError(err);
+  }, []);
+
+  const handleGenderChange = useCallback((gender: GenderOption) => {
+    soundEngine.playSfx('click');
+    setSelectedGender(gender);
+  }, []);
+
+  const handleDemographicsSubmit = useCallback((data: DemographicsData) => {
+    soundEngine.playSfx('click');
+    soundEngine.startMusic();
+    setDemographics(data);
+    setSelectedGender(data.gender);
+    setPhase('briefing');
+  }, []);
+
+  const handleBeginQuest = useCallback(() => {
+    soundEngine.playSfx('click');
+    soundEngine.startMusic();
+    setPhase('playing');
+  }, []);
+
+  const handleModeChange = useCallback((mode: CampusMode, roomId: RoomId | null) => {
+    setCampusMode(mode);
+    setActiveRoomId(roomId);
+  }, []);
+
+  const handleActiveQuestionChange = useCallback(
+    (
+      question: PatientQuestion | null,
+      counter: { roomName: string; current: number; total: number } | null
+    ) => {
+      setActiveQuestion(question);
+      setRoomCounter(counter);
+    },
+    []
+  );
+
+  const handleSelectOption = useCallback((option: OptionLetter) => {
+    if (submitAnswerRef.current) {
+      submitAnswerRef.current(option);
+    }
+  }, []);
+
+  const handleLeaveRoom = useCallback(() => {
+    soundEngine.playSfx('click');
+    if (leaveRoomRef.current) {
+      leaveRoomRef.current();
+    }
+  }, []);
+
+  const handleQuestComplete = useCallback((questResult: QuestResult) => {
+    soundEngine.playSfx('complete');
+    soundEngine.softenMusic();
+    setResult(questResult);
+    setPhase('complete');
+  }, []);
+
+  const handleRestartSession = useCallback(() => {
+    soundEngine.playSfx('click');
+    setResult(null);
+    setDemographics(null);
+    setElapsedMs(0);
+    setToastMessage(null);
+    setActiveQuestion(null);
+    setRoomCounter(null);
+    setSessionResetKey((k) => k + 1);
+    setPhase('landing');
+  }, []);
+
+  const handlePickupSfx = useCallback(() => {
+    soundEngine.playSfx('pickup');
+  }, []);
+
+  const totalAnswered = rooms.reduce((sum, r) => sum + r.completedCount, 0);
+
+  return (
+    <div className="relative w-screen h-screen overflow-hidden bg-[#c2daef] select-none">
+      {/* Unobstructed 3D Campus & Room Viewport */}
+      <CampusCanvas
+        phase={phase}
+        selectedGender={selectedGender}
+        demographicsSnapshot={demographics}
+        sessionResetKey={sessionResetKey}
+        joystickRef={joystickRef}
+        submitAnswerRef={submitAnswerRef}
+        leaveRoomRef={leaveRoomRef}
+        onModelsLoaded={handleModelsLoaded}
+        onModelsError={handleModelsError}
+        onRoomProgressChange={setRooms}
+        onModeChange={handleModeChange}
+        onActiveQuestionChange={handleActiveQuestionChange}
+        onTimerTick={setElapsedMs}
+        onToast={showToast}
+        onPickupSfx={handlePickupSfx}
+        onQuestComplete={handleQuestComplete}
+      />
+
+      {/* Top-Right Global Audio & Fullscreen Controls on Non-Playing Phases */}
+      {phase !== 'playing' && (
+        <div className="fixed right-3 top-3 sm:right-4 sm:top-4 z-30 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleMute}
+            title={muted ? 'Unmute audio (M)' : 'Mute audio (M)'}
+            aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+            className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/95 border border-slate-200 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+
+          {fullscreenSupported && (
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Exit fullscreen (F)' : 'Enter fullscreen (F)'}
+              aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/95 border border-slate-200 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Phase 1: Landing Page + Demographics & Informed Consent */}
+      {phase === 'landing' && (
+        <DemographicsLanding
+          modelsLoaded={modelsLoaded}
+          modelsError={modelsError}
+          selectedGender={selectedGender}
+          initialData={demographics}
+          onGenderChange={handleGenderChange}
+          onSubmit={handleDemographicsSubmit}
+        />
+      )}
+
+      {/* Phase 2: Pre-Quest Briefing */}
+      {phase === 'briefing' && demographics && (
+        <BriefingOverlay
+          demographics={demographics}
+          onBack={() => {
+            soundEngine.playSfx('click');
+            setPhase('landing');
+          }}
+          onBegin={handleBeginQuest}
+        />
+      )}
+
+      {/* Phase 3: Active Gameplay HUD & 1st-Person Questionnaire */}
+      {phase === 'playing' && demographics && (
+        <>
+          <GameplayHud
+            rooms={rooms}
+            campusMode={campusMode}
+            activeRoomId={activeRoomId}
+            elapsedMs={elapsedMs}
+            demographics={demographics}
+            toastMessage={toastMessage}
+            muted={muted}
+            isFullscreen={isFullscreen}
+            fullscreenSupported={fullscreenSupported}
+            joystickRef={joystickRef}
+            onToggleMute={toggleMute}
+            onToggleFullscreen={toggleFullscreen}
+            onLeaveRoom={handleLeaveRoom}
+          />
+
+          {campusMode === 'seated_first_person' && (
+            <QuestionnaireOverlay
+              question={activeQuestion}
+              roomCounter={roomCounter}
+              totalAnswered={totalAnswered}
+              totalQuestionnaires={TOTAL_QUESTIONNAIRES}
+              onSelectOption={handleSelectOption}
+            />
+          )}
+        </>
+      )}
+
+      {/* Phase 4: Study Results & JSON Export */}
+      {phase === 'complete' && result && (
+        <CompletionSummary result={result} onRestart={handleRestartSession} />
+      )}
+    </div>
+  );
+}

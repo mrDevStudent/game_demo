@@ -1,0 +1,6 @@
+{
+  "name": "Campus Quest",
+  "description": "Interactive 3D campus quest study built with Three.js.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
