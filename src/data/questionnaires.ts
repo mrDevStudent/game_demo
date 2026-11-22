@@ -1,16 +1,16 @@
 import { RoomConfig } from '../types';
 
 export const NPC_MODEL_FILES = [
-  'Baker.fbx',
-  'doctor (1).fbx',
-  'Elder.fbx',
-  'Farmer (1).fbx',
-  'kid (1).fbx',
-  'mechanic (1).fbx',
-  'Shopkeeper.fbx',
-  'civilian1 (1).fbx',
-  'civilian2 (1).fbx',
-  'civilian3 (1).fbx',
+  'Baker.glb',
+  'doctor (1).glb',
+  'Elder.glb',
+  'Farmer (1).glb',
+  'kid (1).glb',
+  'mechanic (1).glb',
+  'Shopkeeper.glb',
+  'civilian1 (1).glb',
+  'civilian2 (1).glb',
+  'civilian3 (1).glb',
 ] as const;
 
 export const CAMPUS_ROOMS: RoomConfig[] = [
@@ -33,7 +33,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 1,
         patientName: 'Client 01 · Leo',
         patientRole: 'Junior Student',
-        modelFile: 'kid (1).fbx',
+        modelFile: 'kid (1).glb',
         scale: 0.0145,
         prompt: 'Which study schedule helps you retain complex lecture topics most effectively?',
         options: {
@@ -49,7 +49,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 2,
         patientName: 'Client 02 · Maya',
         patientRole: 'Senior Student',
-        modelFile: 'civilian1 (1).fbx',
+        modelFile: 'civilian1 (1).glb',
         scale: 0.0175,
         prompt: 'When a concept in class feels unclear, what is your preferred first step?',
         options: {
@@ -65,7 +65,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 3,
         patientName: 'Client 03 · Liam',
         patientRole: 'Transfer Student',
-        modelFile: 'civilian2 (1).fbx',
+        modelFile: 'civilian2 (1).glb',
         scale: 0.0175,
         prompt: 'How do you prefer to organize group project responsibilities in a course?',
         options: {
@@ -81,7 +81,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 4,
         patientName: 'Client 04 · Chloe',
         patientRole: 'Study Group Lead',
-        modelFile: 'civilian3 (1).fbx',
+        modelFile: 'civilian3 (1).glb',
         scale: 0.0175,
         prompt: 'What classroom environment supports your focus best during problem-solving?',
         options: {
@@ -97,7 +97,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 5,
         patientName: 'Client 05 · Noah',
         patientRole: 'Workshop Technician',
-        modelFile: 'mechanic (1).fbx',
+        modelFile: 'mechanic (1).glb',
         scale: 0.0175,
         prompt: 'Which feedback format helps you improve most after completing an assignment?',
         options: {
@@ -128,7 +128,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 1,
         patientName: 'Client 01 · Arthur',
         patientRole: 'Retired Professor',
-        modelFile: 'Elder.fbx',
+        modelFile: 'Elder.glb',
         scale: 0.0175,
         prompt: 'When starting a research paper, which library resource do you consult first?',
         options: {
@@ -144,7 +144,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 2,
         patientName: 'Client 02 · Dr. Vance',
         patientRole: 'Visiting Researcher',
-        modelFile: 'doctor (1).fbx',
+        modelFile: 'doctor (1).glb',
         scale: 0.0175,
         prompt: 'How do you verify whether a source is reliable enough to cite?',
         options: {
@@ -160,7 +160,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 3,
         patientName: 'Client 03 · Hannah',
         patientRole: 'Archive Intern',
-        modelFile: 'civilian1 (1).fbx',
+        modelFile: 'civilian1 (1).glb',
         scale: 0.0175,
         prompt: 'Which library zone do you use most often during midterms?',
         options: {
@@ -176,7 +176,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 4,
         patientName: 'Client 04 · Marcus',
         patientRole: 'Thesis Candidate',
-        modelFile: 'civilian2 (1).fbx',
+        modelFile: 'civilian2 (1).glb',
         scale: 0.0175,
         prompt: 'What helps you manage citations cleanly across multiple chapters?',
         options: {
@@ -192,7 +192,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 5,
         patientName: 'Client 05 · Claire',
         patientRole: 'Campus Bookstore Coordinator',
-        modelFile: 'Shopkeeper.fbx',
+        modelFile: 'Shopkeeper.glb',
         scale: 0.0175,
         prompt: 'Which library service upgrade would improve your study workflow most?',
         options: {
@@ -223,7 +223,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 1,
         patientName: 'Client 01 · Marco',
         patientRole: 'Campus Baker',
-        modelFile: 'Baker.fbx',
+        modelFile: 'Baker.glb',
         scale: 0.0175,
         prompt: 'What factor matters most when choosing a weekday campus lunch?',
         options: {
@@ -239,7 +239,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 2,
         patientName: 'Client 02 · Aria',
         patientRole: 'Counter Manager',
-        modelFile: 'Shopkeeper.fbx',
+        modelFile: 'Shopkeeper.glb',
         scale: 0.0175,
         prompt: 'How clearly should canteen menus label allergen and nutrition information?',
         options: {
@@ -255,7 +255,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 3,
         patientName: 'Client 03 · Owen',
         patientRole: 'Fresh Produce Supplier',
-        modelFile: 'Farmer (1).fbx',
+        modelFile: 'Farmer (1).glb',
         scale: 0.0175,
         prompt: 'During peak noon rush, how do you prefer to handle meal ordering?',
         options: {
@@ -271,7 +271,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 4,
         patientName: 'Client 04 · Toby',
         patientRole: 'Student Athlete',
-        modelFile: 'kid (1).fbx',
+        modelFile: 'kid (1).glb',
         scale: 0.0145,
         prompt: 'Which sustainability practice should the campus canteen prioritize?',
         options: {
@@ -287,7 +287,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 5,
         patientName: 'Client 05 · Daniel',
         patientRole: 'Lunch Patron',
-        modelFile: 'civilian3 (1).fbx',
+        modelFile: 'civilian3 (1).glb',
         scale: 0.0175,
         prompt: 'What seating layout makes the canteen most comfortable for breaks?',
         options: {
@@ -318,7 +318,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 1,
         patientName: 'Client 01 · Dr. Reyes',
         patientRole: 'Campus Health Advisor',
-        modelFile: 'doctor (1).fbx',
+        modelFile: 'doctor (1).glb',
         scale: 0.0175,
         prompt: 'How should campus leadership share important schedule or policy updates?',
         options: {
@@ -334,7 +334,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 2,
         patientName: 'Client 02 · Mr. Santos',
         patientRole: 'Parent Representative',
-        modelFile: 'Elder.fbx',
+        modelFile: 'Elder.glb',
         scale: 0.0175,
         prompt: 'What makes requesting an official school certificate or clearance smoothest?',
         options: {
@@ -350,7 +350,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 3,
         patientName: 'Client 03 · Victor',
         patientRole: 'Grounds Coordinator',
-        modelFile: 'Farmer (1).fbx',
+        modelFile: 'Farmer (1).glb',
         scale: 0.0175,
         prompt: 'When students face scheduling conflicts or academic stress, what support helps most?',
         options: {
@@ -366,7 +366,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 4,
         patientName: 'Client 04 · Elena',
         patientRole: 'Facilities Engineer',
-        modelFile: 'mechanic (1).fbx',
+        modelFile: 'mechanic (1).glb',
         scale: 0.0175,
         prompt: 'Which campus safety measure gives visitors and students the highest confidence?',
         options: {
@@ -382,7 +382,7 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
         patientIndex: 5,
         patientName: 'Client 05 · Camille',
         patientRole: 'Event Catering Lead',
-        modelFile: 'Baker.fbx',
+        modelFile: 'Baker.glb',
         scale: 0.0175,
         prompt: 'Which campus improvement should receive top priority next academic year?',
         options: {

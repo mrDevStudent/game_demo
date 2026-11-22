@@ -54,6 +54,7 @@ export default function App() {
   const joystickRef = useRef<JoystickInput>({ active: false, x: 0, y: 0 });
   const submitAnswerRef = useRef<((option: OptionLetter) => void) | null>(null);
   const leaveRoomRef = useRef<(() => void) | null>(null);
+  const retryModelsRef = useRef<(() => void) | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
   const docEl = typeof document !== 'undefined' ? document.documentElement : null;
@@ -173,6 +174,12 @@ export default function App() {
     setModelsError(err);
   }, []);
 
+  const handleRetryModels = useCallback(() => {
+    setModelsError(null);
+    setModelsLoaded(false);
+    retryModelsRef.current?.();
+  }, []);
+
   const handleGenderChange = useCallback((gender: GenderOption) => {
     soundEngine.playSfx('click');
     setSelectedGender(gender);
@@ -276,6 +283,7 @@ export default function App() {
           joystickRef={joystickRef}
           submitAnswerRef={submitAnswerRef}
           leaveRoomRef={leaveRoomRef}
+          retryModelsRef={retryModelsRef}
           onModelsLoaded={handleModelsLoaded}
           onModelsError={handleModelsError}
           onRoomProgressChange={setRooms}
@@ -333,6 +341,7 @@ export default function App() {
             initialData={demographics}
             onGenderChange={handleGenderChange}
             onSubmit={handleDemographicsSubmit}
+            onRetryModels={handleRetryModels}
           />
         )}
 

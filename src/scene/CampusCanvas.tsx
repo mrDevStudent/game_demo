@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import {
@@ -67,6 +67,7 @@ interface CampusCanvasProps {
   joystickRef: React.MutableRefObject<JoystickInput>;
   submitAnswerRef: React.MutableRefObject<((option: OptionLetter) => void) | null>;
   leaveRoomRef: React.MutableRefObject<(() => void) | null>;
+  retryModelsRef?: React.MutableRefObject<(() => void) | null>;
   onModelsLoaded: () => void;
   onModelsError: (err: string) => void;
   onRoomProgressChange: (rooms: RoomProgress[]) => void;
@@ -96,10 +97,13 @@ function inspectBinaryError(file: string, buf: ArrayBuffer): string | null {
   }
   const head = new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(48, buf.byteLength)));
   if (head.startsWith('version https://git-lfs.github.com')) {
-    return `${file} is a Git LFS pointer (enable Git LFS in Vercel or commit raw FBX)`;
+    return `${file} is a Git LFS pointer (enable Git LFS in Vercel or commit raw model)`;
   }
   if (head.trimStart().startsWith('<!') || head.trimStart().toLowerCase().startsWith('<html')) {
     return `${file} missing on host (returned HTML)`;
+  }
+  if (/\.glb$/i.test(file) && head.slice(0, 4) !== 'glTF') {
+    return `${file} is not a valid GLB binary`;
   }
   return null;
 }
@@ -107,69 +111,44 @@ function inspectBinaryError(file: string, buf: ArrayBuffer): string | null {
 async function fetchAssetBuffer(file: string): Promise<ArrayBuffer> {
   const encoded = encodeURIComponent(file);
   let lastReason = 'not found';
-  for (const base of MODEL_BASES) {
-    try {
-      const res = await fetch(`${base}${encoded}`);
-      if (!res.ok) {
-        lastReason = `HTTP ${res.status}`;
-        continue;
-      }
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-      if (contentType.includes('text/html')) {
-        lastReason = '404 HTML fallback';
-        continue;
-      }
-      const buf = await res.arrayBuffer();
-      const binaryErr = inspectBinaryError(file, buf);
-      if (binaryErr) {
-        if (binaryErr.includes('Git LFS')) {
-          throw new Error(binaryErr);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (const base of MODEL_BASES) {
+      try {
+        const res = await fetch(`${base}${encoded}`, {
+          cache: attempt === 0 ? 'default' : 'no-store',
+        });
+        if (!res.ok) {
+          lastReason = `HTTP ${res.status}`;
+          continue;
         }
-        lastReason = binaryErr;
-        continue;
+        const contentType = (res.headers.get('content-type') || '').toLowerCase();
+        if (contentType.includes('text/html')) {
+          lastReason = '404 HTML fallback';
+          continue;
+        }
+        const buf = await res.arrayBuffer();
+        const binaryErr = inspectBinaryError(file, buf);
+        if (binaryErr) {
+          if (binaryErr.includes('Git LFS')) {
+            throw new Error(binaryErr);
+          }
+          lastReason = binaryErr;
+          continue;
+        }
+        return buf;
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('Git LFS')) {
+          throw err;
+        }
+        lastReason = err instanceof Error ? err.message : 'network error';
       }
-      return buf;
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('Git LFS')) {
-        throw err;
-      }
-      lastReason = err instanceof Error ? err.message : 'network error';
+    }
+    if (attempt === 0) {
+      await new Promise((r) => window.setTimeout(r, 350));
     }
   }
   throw new Error(`Failed loading ${file}: ${lastReason}`);
-}
-
-async function fetchAssetJson(file: string): Promise<Record<string, unknown>> {
-  const encoded = encodeURIComponent(file);
-  for (const base of MODEL_BASES) {
-    try {
-      const res = await fetch(`${base}${encoded}`);
-      if (!res.ok) continue;
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-      if (contentType.includes('text/html')) continue;
-      return (await res.json()) as Record<string, unknown>;
-    } catch {
-      // Try next path
-    }
-  }
-  throw new Error(`Unable to load animation asset: ${file}`);
-}
-
-async function loadCharacterTexture(file: string): Promise<THREE.Texture> {
-  const loader = new THREE.TextureLoader();
-  const encoded = encodeURIComponent(file);
-  for (const base of MODEL_BASES) {
-    try {
-      const tex = await new Promise<THREE.Texture>((resolve, reject) => {
-        loader.load(`${base}${encoded}`, resolve, undefined, reject);
-      });
-      tex.colorSpace = THREE.SRGBColorSpace;
-      return tex;
-    } catch {
-      // Try next path
-    }
-  }
-  throw new Error(`Unable to load texture asset: ${file}`);
 }
 
 function detectSoftwareWebGL(): boolean {
@@ -340,6 +319,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
   joystickRef,
   submitAnswerRef,
   leaveRoomRef,
+  retryModelsRef,
   onModelsLoaded,
   onModelsError,
   onRoomProgressChange,
@@ -470,7 +450,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     let sharedNpcIdleClip: THREE.AnimationClip | null = null;
     let npcGestureClips: NpcGestureClips | null = null;
 
-    // Cache of uploaded custom NPC FBX groups keyed by filename
+    // Cache of custom NPC GLB groups keyed by filename
     const npcTemplateCache = new Map<string, Promise<THREE.Group>>();
     const npcLoadedSet = new Set<string>();
 
@@ -505,8 +485,12 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           await waitForIdleSlot();
           if (disposed) throw new Error('Cancelled');
         }
-        const fbx = new FBXLoader().parse(buf, `${import.meta.env.BASE_URL || '/'}models/`);
-        fbx.traverse((child) => {
+        const basePath = `${import.meta.env.BASE_URL || '/'}models/`;
+        const gltf = await new GLTFLoader().parseAsync(buf, basePath);
+        if (disposed) throw new Error('Cancelled');
+
+        const modelGroup = gltf.scene;
+        modelGroup.traverse((child) => {
           const mesh = child as THREE.Mesh;
           if (mesh.isMesh) {
             mesh.castShadow = true;
@@ -526,7 +510,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           }
         });
         npcLoadedSet.add(file);
-        return fbx;
+        return modelGroup;
       })().catch((err) => {
         // Never permanently cache a failed fetch/parse so room entry can retry cleanly
         npcTemplateCache.delete(file);
@@ -538,23 +522,27 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     };
 
     async function loadPlayerTemplate(
-      fbxFile: string,
-      idleFile: string,
-      texFile: string
+      glbFile: string
     ): Promise<{ rig: CharacterRig; walkClip: THREE.AnimationClip; idleClip: THREE.AnimationClip }> {
-      const [buf, idleJson, tex] = await Promise.all([
-        fetchAssetBuffer(fbxFile),
-        fetchAssetJson(idleFile),
-        loadCharacterTexture(texFile),
-      ]);
+      const buf = await fetchAssetBuffer(glbFile);
+      if (disposed) throw new Error('Cancelled');
+      const basePath = `${import.meta.env.BASE_URL || '/'}models/`;
+      const gltf = await new GLTFLoader().parseAsync(buf, basePath);
+      if (disposed) throw new Error('Cancelled');
 
-      const fbx = new FBXLoader().parse(buf, '');
-      fbx.scale.setScalar(1.75);
+      const rootModel = gltf.scene;
+      rootModel.scale.setScalar(1.75);
 
-      const walkClip = fbx.animations[0];
-      const idleClip = THREE.AnimationClip.parse(idleJson as never);
+      const walkClip =
+        gltf.animations.find((a) => a.name === 'walk') ?? gltf.animations[0];
+      const idleClip =
+        gltf.animations.find((a) => a.name === 'idle') ?? gltf.animations[1] ?? walkClip;
 
-      const playerModel = cloneSkeleton(fbx) as THREE.Group;
+      if (!walkClip || !idleClip) {
+        throw new Error(`Missing animations in ${glbFile}`);
+      }
+
+      const playerModel = cloneSkeleton(rootModel) as THREE.Group;
       const group = new THREE.Group();
       group.add(playerModel);
 
@@ -564,12 +552,18 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           mesh.castShadow = true;
           mesh.receiveShadow = true;
           mesh.frustumCulled = false;
-          const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
-          mat.map = tex;
-          mat.color.setHex(0xffffff);
-          mat.roughness = 0.72;
-          mat.needsUpdate = true;
-          mesh.material = mat;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((m) => {
+            if (!m) return;
+            const std = m as THREE.MeshStandardMaterial;
+            if (std.map) {
+              std.map.colorSpace = THREE.SRGBColorSpace;
+              std.map.needsUpdate = true;
+            }
+            std.color?.setHex(0xffffff);
+            std.roughness = 0.72;
+            std.needsUpdate = true;
+          });
         }
       });
 
@@ -589,11 +583,26 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       };
     }
 
-    (async () => {
+    let loadingPlayers = false;
+    const loadAllCharacterAssets = async () => {
+      if (loadingPlayers || disposed) return;
+      loadingPlayers = true;
       try {
         const [fRes, mRes] = await Promise.all([
-          loadPlayerTemplate('female.fbx', 'female_idle.json', 'female_texture.jpg'),
-          loadPlayerTemplate('male.fbx', 'male_idle.json', 'male_texture.jpg'),
+          playerRigs.female
+            ? Promise.resolve({
+                rig: playerRigs.female,
+                walkClip: sharedNpcWalkClip!,
+                idleClip: sharedNpcIdleClip!,
+              })
+            : loadPlayerTemplate('female.glb'),
+          playerRigs.male
+            ? Promise.resolve({
+                rig: playerRigs.male,
+                walkClip: sharedNpcWalkClip!,
+                idleClip: sharedNpcIdleClip!,
+              })
+            : loadPlayerTemplate('male.glb'),
         ]);
         if (disposed) return;
 
@@ -635,8 +644,17 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           const msg = err instanceof Error ? err.message : 'Failed to load 3D character models.';
           callbacksRef.current.onModelsError(msg);
         }
+      } finally {
+        loadingPlayers = false;
       }
-    })();
+    };
+
+    if (retryModelsRef) {
+      retryModelsRef.current = () => {
+        void loadAllCharacterAssets();
+      };
+    }
+    void loadAllCharacterAssets();
 
     // Simulation & Room Queue State
     const player = { x: 0, z: 0, heading: 0 };

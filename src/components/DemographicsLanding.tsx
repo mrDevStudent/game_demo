@@ -9,6 +9,7 @@ interface DemographicsLandingProps {
   initialData: DemographicsData | null;
   onGenderChange: (gender: GenderOption) => void;
   onSubmit: (data: DemographicsData) => void;
+  onRetryModels?: () => void;
 }
 
 export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
@@ -18,6 +19,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
   initialData,
   onGenderChange,
   onSubmit,
+  onRetryModels,
 }) => {
   const [name, setName] = useState(initialData?.name ?? '');
   const [age, setAge] = useState(initialData?.age ? String(initialData.age) : '');
@@ -194,9 +196,18 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
           {(errorMsg || modelsError) && (
             <div
               role="alert"
-              className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700"
+              className="flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700"
             >
-              {modelsError ?? errorMsg}
+              <span className="break-words">{modelsError ?? errorMsg}</span>
+              {modelsError && onRetryModels && (
+                <button
+                  type="button"
+                  onClick={onRetryModels}
+                  className="shrink-0 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 transition-colors"
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
 
