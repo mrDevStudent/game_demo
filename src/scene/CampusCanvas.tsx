@@ -595,14 +595,14 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
                 walkClip: sharedNpcWalkClip!,
                 idleClip: sharedNpcIdleClip!,
               })
-            : loadPlayerTemplate('female.glb'),
+            : loadPlayerTemplate('female-character.glb'),
           playerRigs.male
             ? Promise.resolve({
                 rig: playerRigs.male,
                 walkClip: sharedNpcWalkClip!,
                 idleClip: sharedNpcIdleClip!,
               })
-            : loadPlayerTemplate('male.glb'),
+            : loadPlayerTemplate('male-character.glb'),
         ]);
         if (disposed) return;
 
@@ -748,7 +748,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       remaining.forEach((q, idx) => {
         const baseTemplate = loadedMap.get(q.modelFile)!;
         const clonedModel = cloneSkeleton(baseTemplate) as THREE.Group;
-        const npcScale = q.scale ?? 0.0175;
+        const npcScale = q.scale ?? 1.75;
         clonedModel.scale.setScalar(npcScale);
         clonedModel.updateMatrixWorld(true);
 
