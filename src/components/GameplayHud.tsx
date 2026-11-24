@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronUp,
   Circle,
-  DoorOpen,
   RotateCw,
   X,
 } from 'lucide-react';
@@ -20,7 +19,6 @@ interface GameplayHudProps {
   demographics: DemographicsData;
   toastMessage: string | null;
   joystickRef: React.MutableRefObject<JoystickInput>;
-  onLeaveRoom: () => void;
 }
 
 function formatTime(ms: number): string {
@@ -38,7 +36,6 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
   demographics,
   toastMessage,
   joystickRef,
-  onLeaveRoom,
 }) => {
   const [progressHidden, setProgressHidden] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth < 640 : false
@@ -75,7 +72,6 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
   }, []);
 
   const totalDone = rooms.reduce((sum, r) => sum + r.completedCount, 0);
-  const activeRoom = rooms.find((r) => r.id === activeRoomId) ?? null;
 
   const resetStick = () => {
     pointerIdRef.current = null;
@@ -125,48 +121,35 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
 
   const instructionText =
     campusMode === 'outdoor'
-      ? 'Walk into any building entrance'
+      ? 'Walk into any room entrance'
       : campusMode === 'room_walk'
         ? 'Follow the arrow to sit at the desk chair'
-        : 'Answer each client (A / B / C / D)';
+        : 'Finish all 5 clients (A / B / C / D)';
 
   return (
     <div className="fixed inset-0 z-10 pointer-events-none">
       {/* Top-Left Collapsible / Hideable Progress UI */}
       <div className="pointer-events-auto fixed left-3 top-3 sm:left-4 sm:top-4 flex flex-col items-start gap-2">
         {progressHidden ? (
-          <>
-            <button
-              type="button"
-              onClick={() => setProgressHidden(false)}
-              title="Show progress"
-              aria-label="Show progress"
-              className="h-10 px-2.5 sm:px-3 flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
-            >
-              <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
-              <span className="hidden sm:inline text-slate-600">Progress</span>
-              <span className="font-mono-tabular font-bold text-slate-900">
-                {totalDone}/{TOTAL_QUESTIONNAIRES}
-              </span>
-              <span className="text-slate-300" aria-hidden="true">
-                ·
-              </span>
-              <span className="font-mono-tabular font-bold text-blue-700">
-                {formatTime(elapsedMs)}
-              </span>
-            </button>
-
-            {campusMode === 'room_walk' && activeRoom && (
-              <button
-                type="button"
-                onClick={onLeaveRoom}
-                className="h-9 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/95 shadow-sm text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-              >
-                <DoorOpen className="w-3.5 h-3.5 shrink-0" />
-                <span>Exit {activeRoom.name}</span>
-              </button>
-            )}
-          </>
+          <button
+            type="button"
+            onClick={() => setProgressHidden(false)}
+            title="Show progress"
+            aria-label="Show progress"
+            className="h-10 px-2.5 sm:px-3 flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
+          >
+            <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+            <span className="hidden sm:inline text-slate-600">Progress</span>
+            <span className="font-mono-tabular font-bold text-slate-900">
+              {totalDone}/{TOTAL_QUESTIONNAIRES}
+            </span>
+            <span className="text-slate-300" aria-hidden="true">
+              ·
+            </span>
+            <span className="font-mono-tabular font-bold text-blue-700">
+              {formatTime(elapsedMs)}
+            </span>
+          </button>
         ) : (
           <div className="w-56 sm:w-60 rounded-xl bg-white/95 border border-slate-200 shadow-md p-3.5 text-slate-900">
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -228,17 +211,6 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
             <p className="mt-1 text-[11px] text-slate-500 truncate">
               {demographics.section} · {demographics.gender === 'female' ? 'Female' : 'Male'}
             </p>
-
-            {campusMode === 'room_walk' && activeRoom && (
-              <button
-                type="button"
-                onClick={onLeaveRoom}
-                className="mt-2.5 w-full flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
-              >
-                <DoorOpen className="w-3.5 h-3.5 shrink-0" />
-                <span>Exit {activeRoom.name}</span>
-              </button>
-            )}
           </div>
         )}
       </div>

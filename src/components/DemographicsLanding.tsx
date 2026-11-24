@@ -170,7 +170,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                 <strong>Purpose:</strong> You are invited to participate in an interactive 3D campus navigation simulation designed to observe wayfinding accuracy, completion timing, and route choices.
               </p>
               <p>
-                <strong>Procedures:</strong> After confirming your demographic details, you will guide a 3D avatar across a virtual school campus to collect three items (Notebook, Library Card, Lunch Pass) and deliver them to the Principal&apos;s Office.
+                <strong>Procedures:</strong> After confirming your demographic details, you will guide a 3D avatar across a virtual campus to enter Room 1 through Room 4 and complete 5 client questionnaires in each room.
               </p>
               <p>
                 <strong>Confidentiality &amp; Voluntary Participation:</strong> Providing your name is optional. All recorded movement coordinates, event timestamps, and demographic entries are packaged under a randomly generated 6-character participant code for researcher archiving and review. Participation is completely voluntary and you may stop at any time.

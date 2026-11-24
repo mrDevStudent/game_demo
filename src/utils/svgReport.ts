@@ -164,7 +164,7 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
   ${endPt ? `<circle cx="${toSvgX(endPt.x).toFixed(1)}" cy="${toSvgY(endPt.z).toFixed(1)}" r="5.5" fill="#e11d48" stroke="#ffffff" stroke-width="1.5"/>` : ''}
 
   <!-- Room Order & Notes Right Column -->
-  <text x="476" y="286" font-size="13" font-weight="700" fill="#0f172a">BUILDING SEQUENCE &amp; RESPONSE SUMMARY</text>
+  <text x="476" y="286" font-size="13" font-weight="700" fill="#0f172a">ROOM SEQUENCE &amp; RESPONSE SUMMARY</text>
   <rect x="476" y="300" width="600" height="270" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
   ${roomMeta
     .map((r, i) => {
@@ -188,7 +188,7 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
   <text x="44" y="742" font-size="13" font-weight="700" fill="#0f172a">RECORDED QUESTIONNAIRE RESPONSES (20 ITEMS)</text>
   <rect x="44" y="752" width="1032" height="24" rx="6" fill="#1e293b"/>
   <text x="58" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">#</text>
-  <text x="96" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">BUILDING</text>
+  <text x="96" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">ROOM</text>
   <text x="235" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">CLIENT NPC</text>
   <text x="408" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">OPT</text>
   <text x="448" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">SELECTED RESPONSE</text>

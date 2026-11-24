@@ -1,5 +1,6 @@
 import React from 'react';
 import { CheckCircle2, CloudUpload, Lock, RefreshCw, RotateCcw } from 'lucide-react';
+import { CAMPUS_ROOMS } from '../data/questionnaires';
 import { QuestResult } from '../types';
 
 interface CompletionSummaryProps {
@@ -121,9 +122,11 @@ export const CompletionSummary: React.FC<CompletionSummaryProps> = ({
             </span>
           </div>
           <div className="flex justify-between">
-            <span>Building Order</span>
-            <span className="font-semibold text-slate-900 capitalize">
-              {result.roomOrder.join(' → ')}
+            <span>Room Order</span>
+            <span className="font-semibold text-slate-900">
+              {result.roomOrder
+                .map((id) => CAMPUS_ROOMS.find((r) => r.id === id)?.name ?? id)
+                .join(' → ')}
             </span>
           </div>
         </div>

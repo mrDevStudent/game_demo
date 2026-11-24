@@ -416,6 +416,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     pmremGenerator.dispose();
 
     const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 220);
+    camera.position.set(-1.45, 1.55, 4.75);
+    camera.lookAt(-1.45, 1.05, 0);
 
     const hemiLight = new THREE.HemisphereLight(0xf8fafc, 0x5c7356, 0.68);
     scene.add(hemiLight);
@@ -451,7 +453,13 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     let npcGestureClips: NpcGestureClips | null = null;
 
     // Cache of custom NPC GLB groups keyed by filename
-    const npcTemplateCache = new Map<string, Promise<THREE.Group>>();
+    interface NpcTemplateEntry {
+      modelGroup: THREE.Group;
+      walkClip?: THREE.AnimationClip;
+      idleClip?: THREE.AnimationClip;
+    }
+
+    const npcTemplateCache = new Map<string, Promise<NpcTemplateEntry>>();
     const npcLoadedSet = new Set<string>();
 
     let disposed = false;
@@ -474,7 +482,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         }
       });
 
-    const getNpcTemplate = (file: string, softYield = false): Promise<THREE.Group> => {
+    const getNpcTemplate = (file: string, softYield = false): Promise<NpcTemplateEntry> => {
       const existing = npcTemplateCache.get(file);
       if (existing) return existing;
 
@@ -509,8 +517,12 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
             });
           }
         });
+        const walkRaw = gltf.animations.find((a) => a.name === 'walk');
+        const idleRaw = gltf.animations.find((a) => a.name === 'idle');
+        const walkClip = walkRaw ? makeRotationOnlyClip(`npc_walk_${file}`, walkRaw) : undefined;
+        const idleClip = idleRaw ? makeRotationOnlyClip(`npc_idle_${file}`, idleRaw) : undefined;
         npcLoadedSet.add(file);
-        return modelGroup;
+        return { modelGroup, walkClip, idleClip };
       })().catch((err) => {
         // Never permanently cache a failed fetch/parse so room entry can retry cleanly
         npcTemplateCache.delete(file);
@@ -735,7 +747,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       const remaining = room.questions.slice(doneCount);
 
       // Load unique models sequentially so mobile devices don't spike RAM/bandwidth on 5 large FBX files at once
-      const loadedMap = new Map<string, THREE.Group>();
+      const loadedMap = new Map<string, NpcTemplateEntry>();
       for (const q of remaining) {
         if (disposed || activeRoomId !== roomId) return;
         if (!loadedMap.has(q.modelFile)) {
@@ -746,8 +758,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       if (disposed || activeRoomId !== roomId) return;
 
       remaining.forEach((q, idx) => {
-        const baseTemplate = loadedMap.get(q.modelFile)!;
-        const clonedModel = cloneSkeleton(baseTemplate) as THREE.Group;
+        const entry = loadedMap.get(q.modelFile)!;
+        const clonedModel = cloneSkeleton(entry.modelGroup) as THREE.Group;
         const npcScale = q.scale ?? 1.75;
         clonedModel.scale.setScalar(npcScale);
         clonedModel.updateMatrixWorld(true);
@@ -763,8 +775,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
         const anim = new NpcAnimationController(
           clonedModel,
-          sharedNpcWalkClip!,
-          sharedNpcIdleClip!,
+          entry.walkClip ?? sharedNpcWalkClip!,
+          entry.idleClip ?? sharedNpcIdleClip!,
           npcGestureClips!,
           idx
         );
@@ -866,8 +878,6 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         world.campusGroup.visible = false;
         world.roomGroup.visible = true;
         world.roomInterior.guideArrow.visible = true;
-        world.roomInterior.guideRing.visible = true;
-        world.roomInterior.guideChevrons.visible = true;
         world.roomInterior.setRoomSign(`${room.name} · ${room.subtitle}`, room.wallColor);
 
         scene.background = indoorBg.clone();
@@ -891,7 +901,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         await spawnRoomNpcs(roomId);
 
         if (!disposed && activeRoomId === roomId) {
-          callbacksRef.current.onToast(`Entered ${room.name}. Follow the arrow to sit at the desk.`);
+          callbacksRef.current.onToast(`Entered ${room.name}. Finish all 5 questions to unlock exit.`);
         }
       } catch (err) {
         console.error('Failed to spawn room NPCs:', err);
@@ -907,14 +917,18 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     };
 
     leaveRoomRef.current = () => {
-      if (campusMode === 'room_walk' && activeRoomId) {
-        const room = CAMPUS_ROOMS.find((r) => r.id === activeRoomId);
-        telemetry.events.push({
-          t: Math.round(performance.now() - telemetry.t0),
-          type: 'room_leave_early',
-          roomId: activeRoomId,
-        });
-        exitToOutdoor(activeRoomId, `Left ${room?.name ?? 'room'}. Choose any building.`);
+      if (!activeRoomId) return;
+      const room = CAMPUS_ROOMS.find((r) => r.id === activeRoomId);
+      if (!room) return;
+      const done = answeredByRoom[activeRoomId].length;
+      if (done < room.questions.length) {
+        callbacksRef.current.onToast(
+          `Finish all ${room.questions.length} questions in ${room.name} before exiting.`
+        );
+        return;
+      }
+      if (campusMode === 'room_walk') {
+        exitToOutdoor(activeRoomId, `${room.name} complete (5/5)! Choose another room.`);
       }
     };
 
@@ -1022,7 +1036,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           if (!disposed && activeRoomId === completedRoomId) {
             exitToOutdoor(
               completedRoomId,
-              `${completedRoomName} complete (5/5)! Choose another building.`
+              `${completedRoomName} complete (5/5)! Choose another room.`
             );
           }
         }, 1250);
@@ -1179,6 +1193,9 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       const activeGender = genderRef.current;
 
       if (telemetry.prevPhase !== currentPhase) {
+        if (currentPhase === 'playing') {
+          snapNextCamera = true;
+        }
         if (currentPhase === 'playing' && telemetry.questStartPerf === 0) {
           telemetry.questStartPerf = nowPerf;
           telemetry.events.push({
@@ -1224,7 +1241,12 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           }
           _camDesired.set(offsetX, 1.55, 4.75);
           _lookTarget.set(offsetX, 1.05, 0);
-          camera.position.lerp(_camDesired, 1 - Math.exp(-6 * dt));
+          if (snapNextCamera) {
+            camera.position.copy(_camDesired);
+            snapNextCamera = false;
+          } else {
+            camera.position.lerp(_camDesired, 1 - Math.exp(-6 * dt));
+          }
           camera.lookAt(_lookTarget);
         } else {
           if (currentPhase === 'playing' && !telemetry.completed) {
@@ -1407,8 +1429,6 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
                 fpYaw = 0;
                 fpPitch = 0;
                 world.roomInterior.guideArrow.visible = false;
-                world.roomInterior.guideRing.visible = false;
-                world.roomInterior.guideChevrons.visible = false;
                 callbacksRef.current.onModeChange('seated_first_person', activeRoomId);
                 callNextPatientToDesk();
               }

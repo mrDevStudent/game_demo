@@ -30,14 +30,14 @@ export const BriefingOverlay: React.FC<BriefingOverlayProps> = ({
           Simulation Briefing
         </h2>
         <p className="text-xs lg:text-sm text-slate-600 leading-relaxed mb-3 lg:mb-4">
-          Your <span className="font-semibold text-slate-800">{genderLabel}</span> character is ready. Visit all 4 campus buildings in any order to complete all {TOTAL_QUESTIONNAIRES} client questionnaires.
+          Your <span className="font-semibold text-slate-800">{genderLabel}</span> character is ready. Visit Room 1 through Room 4 in any order to complete all {TOTAL_QUESTIONNAIRES} client questionnaires.
         </p>
 
         <div className="grid grid-cols-2 lg:grid-cols-1 gap-x-4 gap-y-1.5 lg:gap-2 mb-3 lg:mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 lg:p-4 text-xs lg:text-sm">
-          {CAMPUS_ROOMS.map((room, idx) => (
+          {CAMPUS_ROOMS.map((room) => (
             <div key={room.id} className="flex items-center justify-between gap-2">
               <span className="font-medium text-slate-800 truncate">
-                {idx + 1}. {room.name}
+                {room.name}
               </span>
               <span className="text-[11px] lg:text-xs text-slate-500 shrink-0">
                 {room.questions.length} Clients
@@ -47,7 +47,7 @@ export const BriefingOverlay: React.FC<BriefingOverlayProps> = ({
         </div>
 
         <p className="text-[11px] lg:text-xs text-slate-500 mb-3.5 lg:mb-5 leading-relaxed">
-          Inside each building, follow the blue guide arrow to the desk chair to enter 1st-person view. Each client in the queue will step forward with an A / B / C / D question.
+          Once you enter a room, follow the guide arrow to the desk chair and finish all 5 client questions before exiting to the next room.
         </p>
 
         <div className="flex items-center gap-2.5 lg:gap-3">

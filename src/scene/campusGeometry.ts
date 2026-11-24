@@ -41,8 +41,6 @@ export interface RoomInterior {
   patientExitSpot: THREE.Vector3;
   queueSpots: THREE.Vector3[];
   guideArrow: THREE.Group;
-  guideRing: THREE.Mesh;
-  guideChevrons: THREE.Group;
   deskCollider: BoxCollider;
   roomColliders: BoxCollider[];
   roomCameraBounds: CameraBox;
@@ -553,20 +551,7 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
   const roomHeaderSprite = createLabelSprite('Consultation Room', 0, 3.25, -6.1, 0.9, 'rgba(15, 23, 42, 0.86)', '#3b82f6');
   group.add(roomHeaderSprite);
 
-  // Guided Target Ring & Animated Floating 3D Arrow above Chair
-  const guideRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1.05, 0.065, 10, 36),
-    new THREE.MeshStandardMaterial({
-      color: 0x2563eb,
-      emissive: 0x2563eb,
-      emissiveIntensity: 0.65,
-      roughness: 0.3,
-    })
-  );
-  guideRing.rotation.x = Math.PI / 2;
-  guideRing.position.set(0, 0.05, -3.65);
-  group.add(guideRing);
-
+  // Animated Floating 3D Arrow above Chair
   const guideArrow = new THREE.Group();
   guideArrow.position.set(0, 2.25, -3.65);
   const arrowMat = new THREE.MeshStandardMaterial({
@@ -583,30 +568,6 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
   arrowShaft.position.y = 0.28;
   guideArrow.add(arrowTip, arrowShaft);
   group.add(guideArrow);
-
-  // Floor directional chevrons angled cleanly toward the desk chair
-  const guideChevrons = new THREE.Group();
-  const chevMat = new THREE.MeshStandardMaterial({
-    color: 0x2563eb,
-    emissive: 0x2563eb,
-    emissiveIntensity: 0.45,
-    transparent: true,
-    opacity: 0.72,
-  });
-  [
-    [3.2, 3.2, -0.32],
-    [3.0, 0.4, -0.52],
-    [2.1, -2.2, -0.78],
-  ].forEach(([cx, cz, yaw]) => {
-    const dot = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.42, 3), chevMat);
-    dot.rotation.order = 'YXZ';
-    dot.rotation.y = yaw;
-    dot.rotation.x = -Math.PI / 2;
-    dot.scale.set(1, 1, 0.35);
-    dot.position.set(cx, 0.04, cz);
-    guideChevrons.add(dot);
-  });
-  group.add(guideChevrons);
 
   const setRoomSign = (title: string, accentHex: number) => {
     const mat = roomHeaderSprite.material as THREE.SpriteMaterial;
@@ -655,8 +616,6 @@ function buildRoomInteriorGroup(maxAnisotropy: number): RoomInterior {
       new THREE.Vector3(-1.35, 0, 5.65),
     ],
     guideArrow,
-    guideRing,
-    guideChevrons,
     deskCollider,
     roomColliders,
     roomCameraBounds,

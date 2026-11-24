@@ -15,8 +15,8 @@ export const NPC_MODEL_FILES = [
 export const CAMPUS_ROOMS: RoomConfig[] = [
   {
     id: 'classroom',
-    name: 'Classroom',
-    subtitle: 'Academic Consultation Room',
+    name: 'Room 1',
+    subtitle: 'Client Questionnaire Station',
     x: -14,
     z: -14,
     facingSign: 1,
@@ -110,8 +110,8 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
   },
   {
     id: 'library',
-    name: 'Library',
-    subtitle: 'Research & Reference Desk',
+    name: 'Room 2',
+    subtitle: 'Client Questionnaire Station',
     x: 14,
     z: -14,
     facingSign: 1,
@@ -205,8 +205,8 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
   },
   {
     id: 'canteen',
-    name: 'Canteen',
-    subtitle: 'Campus Wellness & Dining Desk',
+    name: 'Room 3',
+    subtitle: 'Client Questionnaire Station',
     x: -14,
     z: 14,
     facingSign: -1,
@@ -300,8 +300,8 @@ export const CAMPUS_ROOMS: RoomConfig[] = [
   },
   {
     id: 'principal',
-    name: "Principal's Office",
-    subtitle: 'Student Services & Administration',
+    name: 'Room 4',
+    subtitle: 'Client Questionnaire Station',
     x: 14,
     z: 14,
     facingSign: -1,

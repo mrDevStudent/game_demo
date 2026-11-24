@@ -221,13 +221,6 @@ export default function App() {
     }
   }, []);
 
-  const handleLeaveRoom = useCallback(() => {
-    soundEngine.playSfx('click');
-    if (leaveRoomRef.current) {
-      leaveRoomRef.current();
-    }
-  }, []);
-
   const persistQuestResult = useCallback(async (questResult: QuestResult) => {
     setArchiveState('saving');
     setArchiveError(null);
@@ -368,7 +361,6 @@ export default function App() {
               demographics={demographics}
               toastMessage={toastMessage}
               joystickRef={joystickRef}
-              onLeaveRoom={handleLeaveRoom}
             />
 
             {campusMode === 'seated_first_person' && (
