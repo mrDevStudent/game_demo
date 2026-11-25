@@ -7,6 +7,7 @@ export interface CampusDetailTextures {
   roofShingle: THREE.CanvasTexture;
   plazaMedallion: THREE.CanvasTexture;
   cobblePaver: THREE.CanvasTexture;
+  hedgeFoliage: THREE.CanvasTexture;
   dispose: () => void;
 }
 
@@ -153,16 +154,68 @@ export function createCampusDetailTextures(maxAnisotropy: number): CampusDetailT
   cobblePaver.repeat.set(1.5, 3);
   cobblePaver.anisotropy = maxAnisotropy;
 
+  // 5. Dense manicured boxwood hedge foliage texture
+  const hedgeCanvas = document.createElement('canvas');
+  hedgeCanvas.width = 256;
+  hedgeCanvas.height = 256;
+  const hCtx = hedgeCanvas.getContext('2d')!;
+  hCtx.fillStyle = '#2d5c24';
+  hCtx.fillRect(0, 0, 256, 256);
+
+  const leafPalette = [
+    '#1f4719',
+    '#285820',
+    '#346b28',
+    '#417c30',
+    '#4f8e38',
+    '#62a042',
+    '#74b14b',
+  ];
+  let seed = 1337;
+  const nextRand = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+
+  // Multi-pass overlapping tiny boxwood leaves wrapped seamlessly across edges
+  for (let i = 0; i < 4200; i += 1) {
+    const lx = nextRand() * 256;
+    const ly = nextRand() * 256;
+    const rx = 2.4 + nextRand() * 3.4;
+    const ry = 1.6 + nextRand() * 2.2;
+    const rot = nextRand() * Math.PI * 2;
+    const col = leafPalette[Math.floor(nextRand() * leafPalette.length)];
+    hCtx.fillStyle = col;
+    for (const ox of [-256, 0, 256]) {
+      for (const oy of [-256, 0, 256]) {
+        const px = lx + ox;
+        const py = ly + oy;
+        if (px < -10 || px > 266 || py < -10 || py > 266) continue;
+        hCtx.beginPath();
+        hCtx.ellipse(px, py, rx, ry, rot, 0, Math.PI * 2);
+        hCtx.fill();
+      }
+    }
+  }
+
+  const hedgeFoliage = new THREE.CanvasTexture(hedgeCanvas);
+  hedgeFoliage.colorSpace = THREE.SRGBColorSpace;
+  hedgeFoliage.wrapS = THREE.RepeatWrapping;
+  hedgeFoliage.wrapT = THREE.RepeatWrapping;
+  hedgeFoliage.anisotropy = maxAnisotropy;
+
   return {
     wallStucco,
     roofShingle,
     plazaMedallion,
     cobblePaver,
+    hedgeFoliage,
     dispose: () => {
       wallStucco.dispose();
       roofShingle.dispose();
       plazaMedallion.dispose();
       cobblePaver.dispose();
+      hedgeFoliage.dispose();
     },
   };
 }
@@ -606,52 +659,112 @@ export function buildPlanterHedge(
   x: number,
   z: number,
   w: number,
-  d: number
+  d: number,
+  textures?: CampusDetailTextures
 ): { group: THREE.Group; collider: BoxCollider } {
-  const planter = new THREE.Group();
-  planter.position.set(x, 0, z);
+  const hedgeGroup = new THREE.Group();
+  hedgeGroup.position.set(x, 0, z);
 
-  const stoneMat = new THREE.MeshStandardMaterial({
-    color: 0x94a3b8,
-    roughness: 0.88,
-    metalness: 0.05,
-  });
-  const hedgeMat = new THREE.MeshStandardMaterial({
-    color: 0x3b7d45,
-    roughness: 0.86,
-    metalness: 0.02,
-  });
-  const blossomColors = [0xf59e0b, 0xf43f5e, 0xfbbf24];
+  const height = 0.7;
+  const cornerRadius = Math.min(0.14, w * 0.2, d * 0.2);
+  const segX = Math.max(8, Math.round(w * 7));
+  const segY = 6;
+  const segZ = Math.max(6, Math.round(d * 7));
 
-  const curb = new THREE.Mesh(new THREE.BoxGeometry(w, 0.28, d), stoneMat);
-  curb.position.y = 0.14;
-  curb.castShadow = true;
-  curb.receiveShadow = true;
+  const geom = new THREE.BoxGeometry(w, height, d, segX, segY, segZ);
+  geom.translate(0, height / 2, 0);
 
-  const hedge = new THREE.Mesh(new THREE.BoxGeometry(w - 0.18, 0.52, d - 0.18), hedgeMat);
-  hedge.position.y = 0.48;
-  hedge.castShadow = true;
-  hedge.receiveShadow = true;
-  planter.add(curb, hedge);
+  const posAttr = geom.attributes.position as THREE.BufferAttribute;
+  const hx = w / 2;
+  const hz = d / 2;
+  const ix = Math.max(0.01, hx - cornerRadius);
+  const iz = Math.max(0.01, hz - cornerRadius);
+  const iy = Math.max(0.01, height - cornerRadius);
 
-  const count = Math.max(2, Math.floor(Math.max(w, d) * 1.4));
-  for (let i = 0; i < count; i += 1) {
-    const t = (i + 0.5) / count - 0.5;
-    const fx = w >= d ? t * (w - 0.45) : 0;
-    const fz = d > w ? t * (d - 0.45) : 0;
-    const flower = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(0.11, 0),
-      new THREE.MeshStandardMaterial({
-        color: blossomColors[i % blossomColors.length],
-        roughness: 0.72,
-      })
-    );
-    flower.position.set(fx, 0.76, fz);
-    planter.add(flower);
+  const colors = new Float32Array(posAttr.count * 3);
+  for (let i = 0; i < posAttr.count; i += 1) {
+    let vx = posAttr.getX(i);
+    let vy = posAttr.getY(i);
+    let vz = posAttr.getZ(i);
+
+    const dx = Math.max(0, Math.abs(vx) - ix);
+    const dy = Math.max(0, vy - iy);
+    const dz = Math.max(0, Math.abs(vz) - iz);
+
+    if (dx > 0 || dy > 0 || dz > 0) {
+      const len = Math.hypot(dx, dy, dz) || 1;
+      if (dx > 0) vx = (vx >= 0 ? 1 : -1) * (ix + (dx / len) * cornerRadius);
+      if (dy > 0) vy = iy + (dy / len) * cornerRadius;
+      if (dz > 0) vz = (vz >= 0 ? 1 : -1) * (iz + (dz / len) * cornerRadius);
+    }
+
+    // Subtle organic foliage trim ripple above ground line
+    if (vy > 0.05) {
+      const ripple =
+        Math.sin((vx + x) * 14.3 + (vz + z) * 9.7) * 0.011 +
+        Math.cos((vz + z) * 17.1 - vy * 12.5) * 0.008;
+      if (Math.abs(vx) > hx * 0.65) vx += (vx >= 0 ? 1 : -1) * ripple;
+      if (Math.abs(vz) > hz * 0.65) vz += (vz >= 0 ? 1 : -1) * ripple;
+      if (vy > height * 0.72) vy += ripple * 0.7;
+    } else {
+      vy = 0;
+    }
+
+    posAttr.setXYZ(i, vx, vy, vz);
+
+    // Sunlit crown shading vs shaded grassy base
+    const t = THREE.MathUtils.clamp(vy / height, 0, 1);
+    const r = THREE.MathUtils.lerp(0.56, 1.05, t);
+    const g = THREE.MathUtils.lerp(0.66, 1.12, t);
+    const b = THREE.MathUtils.lerp(0.5, 0.92, t);
+    colors[i * 3] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
   }
 
+  geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geom.computeVertexNormals();
+
+  // Seamless world-scaled UV projection across top and sides so leaf scale stays uniform
+  const normAttr = geom.attributes.normal as THREE.BufferAttribute;
+  const uvAttr = geom.attributes.uv as THREE.BufferAttribute;
+  const uvScale = 0.85;
+  for (let i = 0; i < posAttr.count; i += 1) {
+    const px = posAttr.getX(i);
+    const py = posAttr.getY(i);
+    const pz = posAttr.getZ(i);
+    const nx = Math.abs(normAttr.getX(i));
+    const ny = Math.abs(normAttr.getY(i));
+    const nz = Math.abs(normAttr.getZ(i));
+
+    if (ny >= nx && ny >= nz) {
+      uvAttr.setXY(i, (px + hx) * uvScale, (pz + hz) * uvScale);
+    } else if (nx >= nz) {
+      uvAttr.setXY(i, (pz + hz) * uvScale, py * uvScale);
+    } else {
+      uvAttr.setXY(i, (px + hx) * uvScale, py * uvScale);
+    }
+  }
+  uvAttr.needsUpdate = true;
+
+  const hedgeMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: textures?.hedgeFoliage ?? null,
+    vertexColors: true,
+    roughness: 0.92,
+    metalness: 0.01,
+  });
+  if (!textures?.hedgeFoliage) {
+    hedgeMat.color.setHex(0x4a8c38);
+  }
+
+  const hedgeMesh = new THREE.Mesh(geom, hedgeMat);
+  hedgeMesh.castShadow = true;
+  hedgeMesh.receiveShadow = true;
+  hedgeGroup.add(hedgeMesh);
+
   return {
-    group: planter,
+    group: hedgeGroup,
     collider: { x, z, hw: w / 2, hd: d / 2 },
   };
 }

@@ -1,6 +1,16 @@
-export type GenderOption = 'female' | 'male';
+export type AvatarGender = 'female' | 'male';
 
-export type SimPhase = 'landing' | 'briefing' | 'playing' | 'complete';
+export type GenderOption = 'female' | 'male' | 'other';
+
+export type SimulationStage = 'pre' | 'post';
+
+export type SimPhase =
+  | 'landing'
+  | 'pre_briefing'
+  | 'pre_playing'
+  | 'post_briefing'
+  | 'post_playing'
+  | 'complete';
 
 export type RoomId = 'classroom' | 'library' | 'canteen' | 'principal';
 
@@ -10,19 +20,44 @@ export type OptionLetter = 'A' | 'B' | 'C' | 'D';
 
 export type ArchiveStatus = 'active' | 'archived';
 
+export type CounselingAreaId = 'area1' | 'area2' | 'area3' | 'area4';
+
 export interface DemographicsData {
   name: string;
   age: number;
   gender: GenderOption;
+  genderOther: string;
+  avatar: AvatarGender;
   section: string;
   consented: boolean;
   consentTimestamp: string;
+}
+
+export interface PreSimulationQuestion {
+  id: string;
+  itemNumber: number;
+  areaId: CounselingAreaId;
+  areaTitle: string;
+  prompt: string;
+  options: Record<OptionLetter, string>;
+}
+
+export interface PreSimulationAnswer {
+  questionId: string;
+  itemNumber: number;
+  areaTitle: string;
+  selectedOption: OptionLetter;
+  selectedText: string;
+  responseTimeMs: number;
+  answeredAtMs: number;
 }
 
 export interface PatientQuestion {
   id: string;
   roomId: RoomId;
   patientIndex: number;
+  itemNumber?: number;
+  areaTitle?: string;
   patientName: string;
   patientRole: string;
   modelFile: string;
@@ -73,7 +108,7 @@ export interface TelemetryEvent {
   roomId?: RoomId;
   questionId?: string;
   selectedOption?: OptionLetter;
-  character?: GenderOption;
+  character?: AvatarGender;
   gender?: GenderOption;
   section?: string;
 }
@@ -90,16 +125,18 @@ export interface QuestResult {
     name: string | null;
     age: number;
     gender: GenderOption;
+    genderOther: string;
     section: string;
     consented: boolean;
     consentTimestamp: string;
   };
-  character: GenderOption;
+  character: AvatarGender;
   durationMs: number;
+  preDurationMs: number;
   totalAnswered: number;
   roomOrder: RoomId[];
+  preAnswers: PreSimulationAnswer[];
   answers: QuestionnaireAnswer[];
-  distance: number;
   moveTimeMs: number;
   events: TelemetryEvent[];
   samples: [number, number, number][];
@@ -112,16 +149,18 @@ export interface QuestArchiveRecord {
     name: string;
     age: number;
     gender: GenderOption;
+    genderOther: string;
     section: string;
     consented: boolean;
     consentTimestamp: string;
   };
-  character: GenderOption;
+  character: AvatarGender;
   durationMs: number;
+  preDurationMs: number;
   totalAnswered: number;
   roomOrder: RoomId[];
+  preAnswers: PreSimulationAnswer[];
   answers: QuestionnaireAnswer[];
-  distance: number;
   moveTimeMs: number;
   events: TelemetryEvent[];
   samples: SpatialSample[];
@@ -130,4 +169,11 @@ export interface QuestArchiveRecord {
   editedBy: string;
   createdAtMs: number;
   updatedAtMs: number;
+}
+
+export function formatGenderDisplay(gender: GenderOption, genderOther?: string): string {
+  if (gender === 'female') return 'Female';
+  if (gender === 'male') return 'Male';
+  const custom = (genderOther ?? '').trim();
+  return custom ? `Other: ${custom}` : 'Other';
 }

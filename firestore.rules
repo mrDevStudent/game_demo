@@ -42,10 +42,12 @@ service cloud.firestore {
     function isValidDemographics(d) {
       return d is map
         && d.keys().hasAll(['name', 'age', 'gender', 'section', 'consented', 'consentTimestamp'])
-        && d.keys().hasOnly(['name', 'age', 'gender', 'section', 'consented', 'consentTimestamp'])
+        && d.keys().hasOnly(['name', 'age', 'gender', 'genderOther', 'section', 'consented', 'consentTimestamp'])
         && d.name is string && d.name.size() <= 80
         && d.age is number && d.age >= 7 && d.age <= 99
-        && (d.gender == 'female' || d.gender == 'male')
+        && (d.gender == 'female' || d.gender == 'male' || d.gender == 'other')
+        && (!('genderOther' in d) || (d.genderOther is string && d.genderOther.size() <= 60))
+        && (d.gender != 'other' || ('genderOther' in d && d.genderOther is string && d.genderOther.size() >= 1))
         && d.section is string && d.section.size() >= 1 && d.section.size() <= 60
         && d.consented == true
         && d.consentTimestamp is string && d.consentTimestamp.size() >= 10 && d.consentTimestamp.size() <= 40;
@@ -60,7 +62,6 @@ service cloud.firestore {
           'totalAnswered',
           'roomOrder',
           'answers',
-          'distance',
           'moveTimeMs',
           'events',
           'samples',
@@ -75,8 +76,10 @@ service cloud.firestore {
           'demographics',
           'character',
           'durationMs',
+          'preDurationMs',
           'totalAnswered',
           'roomOrder',
+          'preAnswers',
           'answers',
           'distance',
           'moveTimeMs',
@@ -95,12 +98,14 @@ service cloud.firestore {
         && isValidDemographics(data.demographics)
         && (data.character == 'female' || data.character == 'male')
         && data.durationMs is number && data.durationMs >= 0 && data.durationMs <= 7200000
+        && (!('preDurationMs' in data) || (data.preDurationMs is number && data.preDurationMs >= 0 && data.preDurationMs <= 7200000))
         && data.totalAnswered is number && data.totalAnswered >= 1 && data.totalAnswered <= 20
         && data.roomOrder is list && data.roomOrder.size() >= 1 && data.roomOrder.size() <= 4
         && data.roomOrder[0] is string
+        && (!('preAnswers' in data) || (data.preAnswers is list && data.preAnswers.size() >= 1 && data.preAnswers.size() <= 20 && data.preAnswers[0] is map))
         && data.answers is list && data.answers.size() >= 1 && data.answers.size() <= 20
         && data.answers[0] is map
-        && data.distance is number && data.distance >= 0 && data.distance <= 50000
+        && (!('distance' in data) || (data.distance is number && data.distance >= 0 && data.distance <= 50000))
         && data.moveTimeMs is number && data.moveTimeMs >= 0 && data.moveTimeMs <= 7200000
         && data.events is list && data.events.size() <= 500
         && (data.events.size() == 0 || data.events[0] is map)
@@ -127,6 +132,10 @@ service cloud.firestore {
 
       allow create: if isValidId(submissionId)
         && isValidSubmissionPayload(incoming())
+        && !('distance' in incoming())
+        && ('preAnswers' in incoming())
+        && incoming().preAnswers.size() == 20
+        && ('preDurationMs' in incoming())
         && incoming().archiveStatus == 'active'
         && incoming().adminNotes == ''
         && incoming().editedBy == ''
@@ -139,6 +148,7 @@ service cloud.firestore {
         && incoming().diff(existing()).affectedKeys().hasOnly([
           'demographics',
           'character',
+          'preAnswers',
           'answers',
           'archiveStatus',
           'adminNotes',
@@ -147,10 +157,12 @@ service cloud.firestore {
         ])
         && incoming().participant == existing().participant
         && incoming().durationMs == existing().durationMs
+        && (!('preDurationMs' in existing()) || incoming().preDurationMs == existing().preDurationMs)
         && incoming().totalAnswered == existing().totalAnswered
         && incoming().roomOrder == existing().roomOrder
+        && (!('preAnswers' in existing()) || ('preAnswers' in incoming() && incoming().preAnswers.size() == existing().preAnswers.size()))
         && incoming().answers.size() == existing().answers.size()
-        && incoming().distance == existing().distance
+        && (!('distance' in existing()) || ('distance' in incoming() && incoming().distance == existing().distance))
         && incoming().moveTimeMs == existing().moveTimeMs
         && incoming().events == existing().events
         && incoming().samples == existing().samples

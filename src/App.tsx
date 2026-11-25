@@ -10,23 +10,27 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { saveQuestSubmission } from './services/firebaseArchive';
 import { soundEngine } from './audio/soundEngine';
-import { TOTAL_QUESTIONNAIRES } from './data/questionnaires';
+import { TOTAL_PRE_QUESTIONS, TOTAL_QUESTIONNAIRES } from './data/questionnaires';
 import {
+  AvatarGender,
   CampusMode,
   DemographicsData,
-  GenderOption,
   OptionLetter,
   PatientQuestion,
+  PreSimulationAnswer,
   QuestResult,
   RoomId,
   RoomProgress,
   SimPhase,
+  SimulationStage,
 } from './types';
 
 export default function App() {
   const [phase, setPhase] = useState<SimPhase>('landing');
-  const [selectedGender, setSelectedGender] = useState<GenderOption>('female');
+  const [selectedAvatar, setSelectedAvatar] = useState<AvatarGender>('female');
   const [demographics, setDemographics] = useState<DemographicsData | null>(null);
+  const [preAnswers, setPreAnswers] = useState<PreSimulationAnswer[]>([]);
+  const [preDurationMs, setPreDurationMs] = useState(0);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
 
@@ -160,7 +164,11 @@ export default function App() {
       }
       if (e.code === 'KeyM') toggleMute();
       if (e.code === 'KeyF' && fullscreenSupported) toggleFullscreen();
-      if (e.code === 'KeyC' && phase === 'playing' && campusMode !== 'seated_first_person') {
+      if (
+        e.code === 'KeyC' &&
+        (phase === 'pre_playing' || phase === 'post_playing') &&
+        campusMode !== 'seated_first_person'
+      ) {
         toggleFollowCamera();
       }
     };
@@ -199,23 +207,44 @@ export default function App() {
     retryModelsRef.current?.();
   }, []);
 
-  const handleGenderChange = useCallback((gender: GenderOption) => {
+  const handleAvatarChange = useCallback((avatar: AvatarGender) => {
     soundEngine.playSfx('click');
-    setSelectedGender(gender);
+    setSelectedAvatar(avatar);
   }, []);
 
   const handleDemographicsSubmit = useCallback((data: DemographicsData) => {
     soundEngine.playSfx('click');
     soundEngine.startMusic();
     setDemographics(data);
-    setSelectedGender(data.gender);
-    setPhase('briefing');
+    setSelectedAvatar(data.avatar);
+    setPhase('pre_briefing');
   }, []);
+
+  const handleBeginPreSim = useCallback(() => {
+    soundEngine.playSfx('click');
+    soundEngine.startMusic();
+    setElapsedMs(0);
+    setPhase('pre_playing');
+  }, []);
+
+  const handlePreSimComplete = useCallback(
+    (answers: PreSimulationAnswer[], durationMs: number) => {
+      soundEngine.playSfx('complete');
+      setPreAnswers(answers);
+      setPreDurationMs(durationMs);
+      setActiveQuestion(null);
+      setRoomCounter(null);
+      setElapsedMs(0);
+      setPhase('post_briefing');
+    },
+    []
+  );
 
   const handleBeginQuest = useCallback(() => {
     soundEngine.playSfx('click');
     soundEngine.startMusic();
-    setPhase('playing');
+    setElapsedMs(0);
+    setPhase('post_playing');
   }, []);
 
   const handleModeChange = useCallback((mode: CampusMode, roomId: RoomId | null) => {
@@ -256,17 +285,24 @@ export default function App() {
     (questResult: QuestResult) => {
       soundEngine.playSfx('complete');
       soundEngine.softenMusic();
-      setResult(questResult);
+      const mergedResult: QuestResult = {
+        ...questResult,
+        preAnswers,
+        preDurationMs,
+      };
+      setResult(mergedResult);
       setPhase('complete');
-      void persistQuestResult(questResult);
+      void persistQuestResult(mergedResult);
     },
-    [persistQuestResult]
+    [persistQuestResult, preAnswers, preDurationMs]
   );
 
   const handleRestartSession = useCallback(() => {
     soundEngine.playSfx('click');
     setResult(null);
     setDemographics(null);
+    setPreAnswers([]);
+    setPreDurationMs(0);
     setElapsedMs(0);
     setToastMessage(null);
     setActiveQuestion(null);
@@ -282,6 +318,8 @@ export default function App() {
   }, []);
 
   const totalAnswered = rooms.reduce((sum, r) => sum + r.completedCount, 0);
+  const isPlayingPhase = phase === 'pre_playing' || phase === 'post_playing';
+  const activeStage: SimulationStage = phase === 'pre_playing' ? 'pre' : 'post';
 
   return (
     <ErrorBoundary>
@@ -292,7 +330,7 @@ export default function App() {
         {/* Unobstructed 3D Campus & Room Viewport */}
         <CampusCanvas
           phase={phase}
-          selectedGender={selectedGender}
+          selectedAvatar={selectedAvatar}
           demographicsSnapshot={demographics}
           sessionResetKey={sessionResetKey}
           followCamera={followCamera}
@@ -308,12 +346,13 @@ export default function App() {
           onTimerTick={setElapsedMs}
           onToast={showToast}
           onPickupSfx={handlePickupSfx}
+          onPreSimComplete={handlePreSimComplete}
           onQuestComplete={handleQuestComplete}
         />
 
         {/* Top-Right Global Controls (Camera Toggle, Admin, Audio, Fullscreen) */}
         <div className="fixed right-3 top-3 sm:right-4 sm:top-4 z-30 flex items-center gap-1.5 sm:gap-2">
-          {phase === 'playing' && campusMode !== 'seated_first_person' && (
+          {isPlayingPhase && campusMode !== 'seated_first_person' && (
             <button
               type="button"
               onClick={toggleFollowCamera}
@@ -383,30 +422,43 @@ export default function App() {
           <DemographicsLanding
             modelsLoaded={modelsLoaded}
             modelsError={modelsError}
-            selectedGender={selectedGender}
+            selectedAvatar={selectedAvatar}
             initialData={demographics}
-            onGenderChange={handleGenderChange}
+            onAvatarChange={handleAvatarChange}
             onSubmit={handleDemographicsSubmit}
             onRetryModels={handleRetryModels}
           />
         )}
 
-        {/* Phase 2: Pre-Quest Briefing */}
-        {phase === 'briefing' && demographics && (
+        {/* Phase 2: Part II Pre-Simulation Briefing (3D Campus Simulation) */}
+        {phase === 'pre_briefing' && demographics && (
           <BriefingOverlay
+            stage="pre"
             demographics={demographics}
+            preAnsweredCount={0}
             onBack={() => {
               soundEngine.playSfx('click');
               setPhase('landing');
             }}
+            onBegin={handleBeginPreSim}
+          />
+        )}
+
+        {/* Phase 3: Part III Post-Simulation Briefing (3D Campus Simulation) */}
+        {phase === 'post_briefing' && demographics && (
+          <BriefingOverlay
+            stage="post"
+            demographics={demographics}
+            preAnsweredCount={preAnswers.length}
             onBegin={handleBeginQuest}
           />
         )}
 
-        {/* Phase 3: Active Gameplay HUD & 1st-Person Questionnaire */}
-        {phase === 'playing' && demographics && (
+        {/* Active 3D Simulation HUD & Room Questionnaires (Pre-Sim 20 Items / Post-Sim 20 Items) */}
+        {isPlayingPhase && demographics && (
           <>
             <GameplayHud
+              stage={activeStage}
               rooms={rooms}
               campusMode={campusMode}
               activeRoomId={activeRoomId}
@@ -418,17 +470,20 @@ export default function App() {
 
             {campusMode === 'seated_first_person' && (
               <QuestionnaireOverlay
+                stage={activeStage}
                 question={activeQuestion}
                 roomCounter={roomCounter}
                 totalAnswered={totalAnswered}
-                totalQuestionnaires={TOTAL_QUESTIONNAIRES}
+                totalQuestionnaires={
+                  activeStage === 'pre' ? TOTAL_PRE_QUESTIONS : TOTAL_QUESTIONNAIRES
+                }
                 onSelectOption={handleSelectOption}
               />
             )}
           </>
         )}
 
-        {/* Phase 4: End-Player Completion Summary (No Download / Copy Controls) */}
+        {/* Phase 5: End-Player Completion Summary (No Download / Copy Controls) */}
         {phase === 'complete' && result && (
           <CompletionSummary
             result={result}

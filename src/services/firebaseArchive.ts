@@ -24,7 +24,9 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import {
   ArchiveStatus,
+  AvatarGender,
   GenderOption,
+  PreSimulationAnswer,
   QuestArchiveRecord,
   QuestionnaireAnswer,
   QuestResult,
@@ -155,27 +157,40 @@ function downsampleSpatialSamples(raw: [number, number, number][]): SpatialSampl
   return out;
 }
 
+function normalizeGender(raw: unknown): GenderOption {
+  if (raw === 'male') return 'male';
+  if (raw === 'other') return 'other';
+  return 'female';
+}
+
 export async function saveQuestSubmission(result: QuestResult): Promise<string> {
   const cleanParticipant = result.participant.replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'PART01';
   const docId = `${cleanParticipant}_${Date.now()}`;
   const path = `${COLLECTION_NAME}/${docId}`;
+  const gender = normalizeGender(result.demographics.gender);
+  const genderOther =
+    gender === 'other'
+      ? (result.demographics.genderOther || 'Unspecified').trim().slice(0, 60)
+      : '';
 
   const payload = {
     participant: cleanParticipant,
     demographics: {
       name: (result.demographics.name ?? '').trim().slice(0, 80),
       age: Math.min(99, Math.max(7, Math.round(result.demographics.age || 18))),
-      gender: (result.demographics.gender === 'male' ? 'male' : 'female') as GenderOption,
+      gender,
+      genderOther,
       section: (result.demographics.section || 'Unspecified').trim().slice(0, 60),
       consented: true,
       consentTimestamp: (result.demographics.consentTimestamp || new Date().toISOString()).slice(0, 40),
     },
-    character: (result.character === 'male' ? 'male' : 'female') as GenderOption,
+    character: (result.character === 'male' ? 'male' : 'female') as AvatarGender,
     durationMs: Math.min(7200000, Math.max(0, Math.round(result.durationMs))),
+    preDurationMs: Math.min(7200000, Math.max(0, Math.round(result.preDurationMs || 0))),
     totalAnswered: Math.min(20, Math.max(1, Math.round(result.totalAnswered))),
     roomOrder: result.roomOrder.slice(0, 4),
+    preAnswers: result.preAnswers.slice(0, 20),
     answers: result.answers.slice(0, 20),
-    distance: Math.min(50000, Math.max(0, +result.distance.toFixed(1))),
     moveTimeMs: Math.min(7200000, Math.max(0, Math.round(result.moveTimeMs))),
     events: result.events.slice(0, 500),
     samples: downsampleSpatialSamples(result.samples),
@@ -217,17 +232,19 @@ export function subscribeArchiveRecords(
           demographics: {
             name: String(demo.name ?? ''),
             age: Number(demo.age ?? 0),
-            gender: demo.gender === 'male' ? 'male' : 'female',
+            gender: normalizeGender(demo.gender),
+            genderOther: String(demo.genderOther ?? ''),
             section: String(demo.section ?? ''),
             consented: Boolean(demo.consented),
             consentTimestamp: String(demo.consentTimestamp ?? ''),
           },
           character: data.character === 'male' ? 'male' : 'female',
           durationMs: Number(data.durationMs ?? 0),
+          preDurationMs: Number(data.preDurationMs ?? 0),
           totalAnswered: Number(data.totalAnswered ?? 0),
           roomOrder: (Array.isArray(data.roomOrder) ? data.roomOrder : []) as RoomId[],
+          preAnswers: (Array.isArray(data.preAnswers) ? data.preAnswers : []) as PreSimulationAnswer[],
           answers: (Array.isArray(data.answers) ? data.answers : []) as QuestionnaireAnswer[],
-          distance: Number(data.distance ?? 0),
           moveTimeMs: Number(data.moveTimeMs ?? 0),
           events: (Array.isArray(data.events) ? data.events : []) as TelemetryEvent[],
           samples: (Array.isArray(data.samples) ? data.samples : []) as SpatialSample[],
@@ -254,7 +271,8 @@ export async function updateArchiveRecord(
   id: string,
   updates: {
     demographics: QuestArchiveRecord['demographics'];
-    character: GenderOption;
+    character: AvatarGender;
+    preAnswers?: PreSimulationAnswer[];
     answers: QuestionnaireAnswer[];
     archiveStatus: ArchiveStatus;
     adminNotes: string;
@@ -262,23 +280,36 @@ export async function updateArchiveRecord(
   editorEmail: string
 ): Promise<void> {
   const path = `${COLLECTION_NAME}/${id}`;
+  const gender = normalizeGender(updates.demographics.gender);
+  const genderOther =
+    gender === 'other'
+      ? (updates.demographics.genderOther || 'Unspecified').trim().slice(0, 60)
+      : '';
+
+  const payload: Record<string, unknown> = {
+    demographics: {
+      name: updates.demographics.name.trim().slice(0, 80),
+      age: Math.min(99, Math.max(7, Math.round(updates.demographics.age))),
+      gender,
+      genderOther,
+      section: updates.demographics.section.trim().slice(0, 60),
+      consented: true,
+      consentTimestamp: updates.demographics.consentTimestamp.slice(0, 40),
+    },
+    character: updates.character,
+    answers: updates.answers,
+    archiveStatus: updates.archiveStatus,
+    adminNotes: updates.adminNotes.trim().slice(0, 1000),
+    editedBy: editorEmail.slice(0, 160),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (updates.preAnswers && updates.preAnswers.length > 0) {
+    payload.preAnswers = updates.preAnswers;
+  }
+
   try {
-    await updateDoc(doc(db, COLLECTION_NAME, id), {
-      demographics: {
-        name: updates.demographics.name.trim().slice(0, 80),
-        age: Math.min(99, Math.max(7, Math.round(updates.demographics.age))),
-        gender: updates.demographics.gender,
-        section: updates.demographics.section.trim().slice(0, 60),
-        consented: true,
-        consentTimestamp: updates.demographics.consentTimestamp.slice(0, 40),
-      },
-      character: updates.character,
-      answers: updates.answers,
-      archiveStatus: updates.archiveStatus,
-      adminNotes: updates.adminNotes.trim().slice(0, 1000),
-      editedBy: editorEmail.slice(0, 160),
-      updatedAt: serverTimestamp(),
-    });
+    await updateDoc(doc(db, COLLECTION_NAME, id), payload);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

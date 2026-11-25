@@ -7,11 +7,19 @@ import {
   RotateCw,
   X,
 } from 'lucide-react';
-import { TOTAL_QUESTIONNAIRES } from '../data/questionnaires';
-import { CampusMode, DemographicsData, RoomId, RoomProgress } from '../types';
+import { TOTAL_PRE_QUESTIONS, TOTAL_QUESTIONNAIRES } from '../data/questionnaires';
+import {
+  CampusMode,
+  DemographicsData,
+  formatGenderDisplay,
+  RoomId,
+  RoomProgress,
+  SimulationStage,
+} from '../types';
 import { JoystickInput } from '../scene/CampusCanvas';
 
 interface GameplayHudProps {
+  stage: SimulationStage;
   rooms: RoomProgress[];
   campusMode: CampusMode;
   activeRoomId: RoomId | null;
@@ -29,6 +37,7 @@ function formatTime(ms: number): string {
 }
 
 export const GameplayHud: React.FC<GameplayHudProps> = ({
+  stage,
   rooms,
   campusMode,
   activeRoomId,
@@ -37,6 +46,8 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
   toastMessage,
   joystickRef,
 }) => {
+  const stageLabel = stage === 'pre' ? 'Pre-Sim' : 'Post-Sim';
+  const totalQuestions = stage === 'pre' ? TOTAL_PRE_QUESTIONS : TOTAL_QUESTIONNAIRES;
   const [progressHidden, setProgressHidden] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth < 640 : false
   );
@@ -139,9 +150,9 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
             className="h-10 px-2.5 sm:px-3 flex items-center gap-1.5 rounded-xl bg-white/95 border border-slate-200 shadow-sm text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors"
           >
             <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
-            <span className="hidden sm:inline text-slate-600">Progress</span>
+            <span className="text-slate-600">{stageLabel}</span>
             <span className="font-mono-tabular font-bold text-slate-900">
-              {totalDone}/{TOTAL_QUESTIONNAIRES}
+              {totalDone}/{totalQuestions}
             </span>
             <span className="text-slate-300" aria-hidden="true">
               ·
@@ -154,7 +165,7 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
           <div className="w-56 sm:w-60 rounded-xl bg-white/95 border border-slate-200 shadow-md p-3.5 text-slate-900">
             <div className="flex items-center justify-between gap-2 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Progress ({totalDone}/{TOTAL_QUESTIONNAIRES})
+                {stageLabel} ({totalDone}/{totalQuestions})
               </span>
               <div className="flex items-center gap-1.5">
                 <span className="font-mono-tabular text-sm font-bold text-blue-700">
@@ -209,7 +220,7 @@ export const GameplayHud: React.FC<GameplayHudProps> = ({
             </p>
 
             <p className="mt-1 text-[11px] text-slate-500 truncate">
-              {demographics.section} · {demographics.gender === 'female' ? 'Female' : 'Male'}
+              {demographics.section} · {formatGenderDisplay(demographics.gender, demographics.genderOther)}
             </p>
           </div>
         )}

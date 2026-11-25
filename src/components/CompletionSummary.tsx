@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CheckCircle2, CloudUpload, Lock, RefreshCw, RotateCcw } from 'lucide-react';
 import { CAMPUS_ROOMS } from '../data/questionnaires';
-import { QuestResult } from '../types';
+import { formatGenderDisplay, QuestResult } from '../types';
 
 interface CompletionSummaryProps {
   result: QuestResult;
@@ -25,11 +25,15 @@ export const CompletionSummary: React.FC<CompletionSummaryProps> = ({
   onRetryArchive,
   onRestart,
 }) => {
+  const [responseTab, setResponseTab] = useState<'pre' | 'post'>('post');
+
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center p-3 sm:p-4 pointer-events-none">
       <div className="pointer-events-auto w-full max-w-xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-white shadow-xl border border-slate-200 p-4 sm:p-6 lg:p-7 text-slate-900">
         <div className="text-center mb-5">
-          <p className="text-xs font-medium text-emerald-700 mb-1">All 4 Rooms Completed</p>
+          <p className="text-xs font-medium text-emerald-700 mb-1">
+            Pre-Simulation (20) &amp; Post-Simulation (20) Completed
+          </p>
           <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900">
             Simulation Complete
           </h2>
@@ -75,23 +79,17 @@ export const CompletionSummary: React.FC<CompletionSummaryProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-5">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <span className="block text-[11px] text-slate-500">Questionnaires</span>
+            <span className="block text-[11px] text-slate-500">Pre / Post Items</span>
             <span className="font-mono-tabular text-base font-bold text-slate-900">
-              {result.totalAnswered} / 20
+              {result.preAnswers.length}/20 · {result.totalAnswered}/20
             </span>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <span className="block text-[11px] text-slate-500">Duration</span>
+            <span className="block text-[11px] text-slate-500">Pre · Post Time</span>
             <span className="font-mono-tabular text-base font-bold text-slate-900">
-              {formatTime(result.durationMs)}
-            </span>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <span className="block text-[11px] text-slate-500">Distance</span>
-            <span className="font-mono-tabular text-base font-bold text-slate-900">
-              {result.distance} m
+              {formatTime(result.preDurationMs)} · {formatTime(result.durationMs)}
             </span>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -116,9 +114,9 @@ export const CompletionSummary: React.FC<CompletionSummaryProps> = ({
             </span>
           </div>
           <div className="flex justify-between">
-            <span>Gender / Character</span>
-            <span className="font-semibold text-slate-900 capitalize">
-              {result.demographics.gender} ({result.character} model)
+            <span>Gender / 3D Model</span>
+            <span className="font-semibold text-slate-900">
+              {formatGenderDisplay(result.demographics.gender, result.demographics.genderOther)} ({result.character})
             </span>
           </div>
           <div className="flex justify-between">
@@ -131,24 +129,65 @@ export const CompletionSummary: React.FC<CompletionSummaryProps> = ({
           </div>
         </div>
 
-        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 max-h-44 overflow-y-auto">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
-            Recorded Responses ({result.answers.length})
-          </p>
-          <div className="space-y-1.5 text-xs">
-            {result.answers.map((ans) => (
-              <div
-                key={ans.questionId}
-                className="flex items-center justify-between gap-3 py-1 border-b border-slate-200/70 last:border-b-0"
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              Recorded Responses
+            </p>
+            <div className="inline-flex rounded-lg bg-slate-200/80 p-0.5 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setResponseTab('pre')}
+                className={`rounded-md px-2.5 py-1 transition-colors ${
+                  responseTab === 'pre'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                <span className="text-slate-700 truncate">
-                  {ans.roomName} · {ans.patientName}
-                </span>
-                <span className="font-mono-tabular font-bold text-blue-700 shrink-0">
-                  Option {ans.selectedOption}
-                </span>
-              </div>
-            ))}
+                Pre ({result.preAnswers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setResponseTab('post')}
+                className={`rounded-md px-2.5 py-1 transition-colors ${
+                  responseTab === 'post'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Post ({result.answers.length})
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-44 overflow-y-auto space-y-1.5 text-xs">
+            {responseTab === 'pre'
+              ? result.preAnswers.map((ans) => (
+                  <div
+                    key={ans.questionId}
+                    className="flex items-center justify-between gap-3 py-1 border-b border-slate-200/70 last:border-b-0"
+                  >
+                    <span className="text-slate-700 truncate">
+                      Q{ans.itemNumber} · {ans.areaTitle}
+                    </span>
+                    <span className="font-mono-tabular font-bold text-blue-700 shrink-0">
+                      Option {ans.selectedOption}
+                    </span>
+                  </div>
+                ))
+              : result.answers.map((ans) => (
+                  <div
+                    key={ans.questionId}
+                    className="flex items-center justify-between gap-3 py-1 border-b border-slate-200/70 last:border-b-0"
+                  >
+                    <span className="text-slate-700 truncate">
+                      {ans.roomName} · {ans.patientName}
+                    </span>
+                    <span className="font-mono-tabular font-bold text-blue-700 shrink-0">
+                      Option {ans.selectedOption}
+                    </span>
+                  </div>
+                ))}
           </div>
         </div>
 

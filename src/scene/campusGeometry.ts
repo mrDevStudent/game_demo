@@ -772,25 +772,24 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
     outdoorColliders.push(built.collider);
   });
 
-  // Flowering Planter Hedges framing Building Forecourts & Walkways
+  // Manicured Boxwood Hedges framing Building Forecourts & Walkways (positioned clear of lamp posts, benches, and non-blocking for player)
   const planterSpecs: [number, number, number, number][] = [
-    [-11.2, -3.35, 2.2, 0.72],
-    [-16.8, -3.35, 2.2, 0.72],
-    [11.2, -3.35, 2.2, 0.72],
-    [16.8, -3.35, 2.2, 0.72],
-    [-11.2, 3.35, 2.2, 0.72],
-    [-16.8, 3.35, 2.2, 0.72],
-    [11.2, 3.35, 2.2, 0.72],
-    [16.8, 3.35, 2.2, 0.72],
+    [-8.9, -3.35, 1.7, 0.72],
+    [-17.2, -3.35, 2.0, 0.72],
+    [8.9, -3.35, 1.7, 0.72],
+    [17.2, -3.35, 2.0, 0.72],
+    [-8.9, 3.35, 1.7, 0.72],
+    [-17.2, 3.35, 2.0, 0.72],
+    [8.9, 3.35, 1.7, 0.72],
+    [17.2, 3.35, 2.0, 0.72],
     [-5.8, -7.2, 0.78, 2.6],
     [5.8, -7.2, 0.78, 2.6],
     [-5.8, 7.2, 0.78, 2.6],
     [5.8, 7.2, 0.78, 2.6],
   ];
   planterSpecs.forEach(([px, pz, pw, pd]) => {
-    const built = buildPlanterHedge(px, pz, pw, pd);
+    const built = buildPlanterHedge(px, pz, pw, pd, detailTextures);
     campusGroup.add(built.group);
-    outdoorColliders.push(built.collider);
   });
 
   // Perimeter Stone-and-Wood Fence with Open Avenue Gateways & Lantern Piers

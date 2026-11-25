@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { CAMPUS_ROOMS } from '../data/questionnaires';
+import { CAMPUS_ROOMS, PRE_SIMULATION_QUESTIONS } from '../data/questionnaires';
 import {
   checkIsAdminUser,
   signInAdminWithGoogle,
@@ -28,8 +28,11 @@ import {
 } from '../services/firebaseArchive';
 import {
   ArchiveStatus,
+  AvatarGender,
+  formatGenderDisplay,
   GenderOption,
   OptionLetter,
+  PreSimulationAnswer,
   QuestArchiveRecord,
   QuestionnaireAnswer,
 } from '../types';
@@ -79,9 +82,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
   const [draftAge, setDraftAge] = useState('18');
   const [draftSection, setDraftSection] = useState('');
   const [draftGender, setDraftGender] = useState<GenderOption>('female');
+  const [draftGenderOther, setDraftGenderOther] = useState('');
+  const [draftCharacter, setDraftCharacter] = useState<AvatarGender>('female');
   const [draftStatus, setDraftStatus] = useState<ArchiveStatus>('active');
   const [draftNotes, setDraftNotes] = useState('');
+  const [draftPreAnswers, setDraftPreAnswers] = useState<PreSimulationAnswer[]>([]);
   const [draftAnswers, setDraftAnswers] = useState<QuestionnaireAnswer[]>([]);
+
+  const preQuestionLookup = useMemo(() => {
+    const map = new Map<string, Record<OptionLetter, string>>();
+    PRE_SIMULATION_QUESTIONS.forEach((q) => {
+      map.set(q.id, q.options);
+    });
+    return map;
+  }, []);
 
   const questionLookup = useMemo(() => {
     const map = new Map<string, Record<OptionLetter, string>>();
@@ -158,8 +172,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
     setDraftAge(String(selectedRecord.demographics.age));
     setDraftSection(selectedRecord.demographics.section);
     setDraftGender(selectedRecord.demographics.gender);
+    setDraftGenderOther(selectedRecord.demographics.genderOther ?? '');
+    setDraftCharacter(selectedRecord.character);
     setDraftStatus(selectedRecord.archiveStatus);
     setDraftNotes(selectedRecord.adminNotes);
+    setDraftPreAnswers(selectedRecord.preAnswers.map((a) => ({ ...a })));
     setDraftAnswers(selectedRecord.answers.map((a) => ({ ...a })));
     setEditError(null);
   }, [selectedRecord]);
@@ -230,6 +247,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
         {
           demographics: selectedRecord.demographics,
           character: selectedRecord.character,
+          preAnswers: selectedRecord.preAnswers,
           answers: selectedRecord.answers,
           archiveStatus: nextStatus,
           adminNotes: selectedRecord.adminNotes,
@@ -260,6 +278,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
       setEditError('Course & section cannot be empty.');
       return;
     }
+    if (draftGender === 'other' && !draftGenderOther.trim()) {
+      setEditError('Please specify custom gender text.');
+      return;
+    }
 
     setSavingEdit(true);
     setEditError(null);
@@ -272,9 +294,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
             name: draftName.trim().slice(0, 80),
             age: Math.round(parsedAge),
             gender: draftGender,
+            genderOther: draftGender === 'other' ? draftGenderOther.trim().slice(0, 60) : '',
             section: draftSection.trim().slice(0, 60),
           },
-          character: draftGender,
+          character: draftCharacter,
+          preAnswers: draftPreAnswers,
           answers: draftAnswers,
           archiveStatus: draftStatus,
           adminNotes: draftNotes.trim().slice(0, 1000),
@@ -540,7 +564,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
                         </p>
                         <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
                           <span>
-                            {formatDuration(rec.durationMs)} · {rec.distance}m
+                            {formatDuration(rec.durationMs)} · Pre {rec.preAnswers.length}/20 · Post {rec.totalAnswered}/20
                           </span>
                           <span>{new Date(rec.createdAtMs).toLocaleDateString()}</span>
                         </div>
@@ -723,15 +747,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
 
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                            Gender / Avatar Model
+                            Gender
                           </label>
                           <select
                             value={draftGender}
-                            onChange={(e) => setDraftGender(e.target.value as GenderOption)}
+                            onChange={(e) => {
+                              const next = e.target.value as GenderOption;
+                              setDraftGender(next);
+                              if (next === 'female' || next === 'male') {
+                                setDraftCharacter(next);
+                              }
+                            }}
                             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
                           >
                             <option value="female">Female</option>
                             <option value="male">Male</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+
+                        {draftGender === 'other' && (
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                              Other Gender (Specify)
+                            </label>
+                            <input
+                              type="text"
+                              value={draftGenderOther}
+                              maxLength={60}
+                              placeholder="Specify gender"
+                              onChange={(e) => setDraftGenderOther(e.target.value)}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
+                            />
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                            3D Avatar Model
+                          </label>
+                          <select
+                            value={draftCharacter}
+                            onChange={(e) => setDraftCharacter(e.target.value as AvatarGender)}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
+                          >
+                            <option value="female">Female Model</option>
+                            <option value="male">Male Model</option>
                           </select>
                         </div>
 
@@ -764,9 +825,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
                         />
                       </div>
 
+                      {draftPreAnswers.length > 0 && (
+                        <div>
+                          <p className="text-[11px] font-semibold text-slate-600 mb-2">
+                            Edit Pre-Simulation Answers ({draftPreAnswers.length})
+                          </p>
+                          <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+                            {draftPreAnswers.map((ans, idx) => {
+                              const opts = preQuestionLookup.get(ans.questionId);
+                              return (
+                                <div
+                                  key={ans.questionId}
+                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 text-xs bg-slate-50/50"
+                                >
+                                  <div className="min-w-0">
+                                    <span className="font-semibold text-slate-900">
+                                      Q{ans.itemNumber} · {ans.areaTitle}
+                                    </span>
+                                    <p className="text-[11px] text-slate-500 truncate">
+                                      {ans.selectedText}
+                                    </p>
+                                  </div>
+                                  <select
+                                    value={ans.selectedOption}
+                                    onChange={(e) => {
+                                      const letter = e.target.value as OptionLetter;
+                                      const updatedText = opts?.[letter] ?? ans.selectedText;
+                                      setDraftPreAnswers((prev) =>
+                                        prev.map((item, i) =>
+                                          i === idx
+                                            ? {
+                                                ...item,
+                                                selectedOption: letter,
+                                                selectedText: updatedText,
+                                              }
+                                            : item
+                                        )
+                                      );
+                                    }}
+                                    className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-blue-700 shrink-0"
+                                  >
+                                    {(['A', 'B', 'C', 'D'] as OptionLetter[]).map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        Option {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       <div>
                         <p className="text-[11px] font-semibold text-slate-600 mb-2">
-                          Edit Questionnaire Answers ({draftAnswers.length})
+                          Edit Post-Simulation Room Answers ({draftAnswers.length})
                         </p>
                         <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
                           {draftAnswers.map((ans, idx) => {
@@ -846,7 +960,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
                         Generated SVG Report Preview
                       </h3>
                       <span className="text-[11px] text-slate-400">
-                        Includes Spatial Trajectory Map &amp; 20 Responses
+                        {formatGenderDisplay(selectedRecord.demographics.gender, selectedRecord.demographics.genderOther)} · Pre ({selectedRecord.preAnswers.length}) &amp; Post ({selectedRecord.answers.length})
                       </span>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-100 p-2 overflow-hidden">

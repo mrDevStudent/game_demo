@@ -1,5 +1,5 @@
 import { CAMPUS_ROOMS } from '../data/questionnaires';
-import { QuestArchiveRecord } from '../types';
+import { formatGenderDisplay, QuestArchiveRecord } from '../types';
 
 function escapeXml(str: string): string {
   return str
@@ -23,10 +23,17 @@ function formatDuration(ms: number): string {
 }
 
 export function buildQuestReportSvg(record: QuestArchiveRecord): string {
+  const preList = record.preAnswers.slice(0, 20);
+  const postList = record.answers.slice(0, 20);
   const width = 1120;
-  const height = 1360;
+  const hasPre = preList.length > 0;
+  const height = hasPre ? 1940 : 1360;
 
   const participantLabel = record.demographics.name.trim() || 'Anonymous';
+  const genderLabel = formatGenderDisplay(
+    record.demographics.gender,
+    record.demographics.genderOther
+  );
   const createdDate = new Date(record.createdAtMs).toLocaleString();
   const statusColor = record.archiveStatus === 'archived' ? '#d97706' : '#059669';
   const statusBg = record.archiveStatus === 'archived' ? '#fef3c7' : '#d1fae5';
@@ -82,10 +89,27 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
     })
     .join('\n');
 
-  const answerRows = record.answers
-    .slice(0, 20)
+  const preSectionY = 742;
+  const preAnswerRows = preList
     .map((ans, idx) => {
-      const y = 786 + idx * 25.5;
+      const y = preSectionY + 44 + idx * 25.5;
+      const bg = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
+      return `
+        <rect x="44" y="${y - 17}" width="1032" height="25" fill="${bg}"/>
+        <text x="58" y="${y}" font-size="11" font-weight="600" fill="#64748b">${ans.itemNumber}</text>
+        <text x="96" y="${y}" font-size="11" font-weight="600" fill="#0f172a">${escapeXml(truncateText(ans.areaTitle, 38))}</text>
+        <rect x="408" y="${y - 12}" width="24" height="17" rx="4" fill="#dbeafe"/>
+        <text x="420" y="${y}" text-anchor="middle" font-size="11" font-weight="700" fill="#1d4ed8">${escapeXml(ans.selectedOption)}</text>
+        <text x="448" y="${y}" font-size="11" fill="#1e293b">${escapeXml(truncateText(ans.selectedText, 68))}</text>
+        <text x="1062" y="${y}" text-anchor="end" font-size="11" font-family="ui-monospace, monospace" fill="#475569">${(ans.responseTimeMs / 1000).toFixed(2)}s</text>
+      `;
+    })
+    .join('\n');
+
+  const postSectionY = hasPre ? 1322 : 742;
+  const answerRows = postList
+    .map((ans, idx) => {
+      const y = postSectionY + 44 + idx * 25.5;
       const bg = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
       return `
         <rect x="44" y="${y - 17}" width="1032" height="25" fill="${bg}"/>
@@ -103,6 +127,8 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
   const notesBlock = record.adminNotes.trim()
     ? escapeXml(truncateText(record.adminNotes.trim(), 170))
     : 'No administrator notes recorded.';
+
+  const footerY = height - 36;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
@@ -128,23 +154,23 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
   <rect x="44" y="136" width="510" height="116" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
   <text x="64" y="160" font-size="11" font-weight="700" fill="#64748b">PARTICIPANT METADATA</text>
   <text x="64" y="184" font-size="13" fill="#0f172a"><tspan font-weight="700">Course &amp; Section:</tspan> ${escapeXml(record.demographics.section)}   <tspan font-weight="700">Age:</tspan> ${record.demographics.age}</text>
-  <text x="64" y="206" font-size="13" fill="#0f172a"><tspan font-weight="700">Gender / Avatar:</tspan> ${escapeXml(record.demographics.gender)} (${escapeXml(record.character)})</text>
+  <text x="64" y="206" font-size="13" fill="#0f172a"><tspan font-weight="700">Gender / Avatar:</tspan> ${escapeXml(truncateText(genderLabel, 28))} (${escapeXml(record.character)})</text>
   <text x="64" y="228" font-size="11.5" fill="#475569">Submitted: ${escapeXml(createdDate)}${record.editedBy ? ` · Edited by ${escapeXml(record.editedBy)}` : ''}</text>
 
   <rect x="572" y="136" width="116" height="116" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
-  <text x="630" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">QUESTIONS</text>
-  <text x="630" y="206" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">${record.totalAnswered}/20</text>
+  <text x="630" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">PRE / POST</text>
+  <text x="630" y="206" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">${record.preAnswers.length}/${record.totalAnswered}</text>
   <text x="630" y="232" text-anchor="middle" font-size="11" fill="#059669">Completed</text>
 
   <rect x="702" y="136" width="116" height="116" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
-  <text x="760" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">DURATION</text>
-  <text x="760" y="206" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">${formatDuration(record.durationMs)}</text>
-  <text x="760" y="232" text-anchor="middle" font-size="11" fill="#64748b">Total Time</text>
+  <text x="760" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">PRE-SIM</text>
+  <text x="760" y="206" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">${formatDuration(record.preDurationMs)}</text>
+  <text x="760" y="232" text-anchor="middle" font-size="11" fill="#64748b">Stage 1</text>
 
   <rect x="832" y="136" width="116" height="116" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
-  <text x="890" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">DISTANCE</text>
-  <text x="890" y="206" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">${record.distance}m</text>
-  <text x="890" y="232" text-anchor="middle" font-size="11" fill="#64748b">Walked</text>
+  <text x="890" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">POST-SIM</text>
+  <text x="890" y="206" text-anchor="middle" font-size="24" font-weight="700" fill="#0f172a">${formatDuration(record.durationMs)}</text>
+  <text x="890" y="232" text-anchor="middle" font-size="11" fill="#64748b">Stage 2</text>
 
   <rect x="962" y="136" width="114" height="116" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
   <text x="1019" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">MOVE TIME</text>
@@ -174,7 +200,7 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
         <circle cx="518" cy="${ry + 3}" r="13" fill="#1e293b"/>
         <text x="518" y="${ry + 7}" text-anchor="middle" font-size="11.5" font-weight="700" fill="#ffffff">${r.orderNum || '-'}</text>
         <text x="544" y="${ry - 1}" font-size="13" font-weight="700" fill="#0f172a">${escapeXml(r.name)}</text>
-        <text x="544" y="${ry + 15}" font-size="11" fill="#64748b">${escapeXml(r.subtitle)}</text>
+        <text x="544" y="${ry + 15}" font-size="11" fill="#64748b">${escapeXml(truncateText(r.subtitle, 44))}</text>
         <text x="1042" y="${ry + 6}" text-anchor="end" font-size="12" font-weight="600" fill="#2563eb">Avg ${(r.avgRespMs / 1000).toFixed(2)}s / question</text>
       `;
     })
@@ -184,19 +210,35 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
   <rect x="476" y="612" width="600" height="92" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
   <text x="496" y="642" font-size="12" fill="#334155">${notesBlock}</text>
 
-  <!-- 20 Questionnaire Responses Table -->
-  <text x="44" y="742" font-size="13" font-weight="700" fill="#0f172a">RECORDED QUESTIONNAIRE RESPONSES (20 ITEMS)</text>
-  <rect x="44" y="752" width="1032" height="24" rx="6" fill="#1e293b"/>
-  <text x="58" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">#</text>
-  <text x="96" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">ROOM</text>
-  <text x="235" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">CLIENT NPC</text>
-  <text x="408" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">OPT</text>
-  <text x="448" y="768" font-size="10.5" font-weight="700" fill="#f8fafc">SELECTED RESPONSE</text>
-  <text x="1062" y="768" text-anchor="end" font-size="10.5" font-weight="700" fill="#f8fafc">RT</text>
+  ${
+    hasPre
+      ? `
+  <!-- Pre-Simulation Responses Table -->
+  <text x="44" y="${preSectionY}" font-size="13" font-weight="700" fill="#0f172a">PART II · PRE-SIMULATION RESPONSES (${preList.length} ITEMS)</text>
+  <rect x="44" y="${preSectionY + 10}" width="1032" height="24" rx="6" fill="#1e293b"/>
+  <text x="58" y="${preSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">#</text>
+  <text x="96" y="${preSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">AREA</text>
+  <text x="408" y="${preSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">OPT</text>
+  <text x="448" y="${preSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">SELECTED RESPONSE</text>
+  <text x="1062" y="${preSectionY + 26}" text-anchor="end" font-size="10.5" font-weight="700" fill="#f8fafc">RT</text>
+  ${preAnswerRows}
+  `
+      : ''
+  }
+
+  <!-- Post-Simulation 20 Questionnaire Responses Table -->
+  <text x="44" y="${postSectionY}" font-size="13" font-weight="700" fill="#0f172a">PART III · POST-SIMULATION RESPONSES (${postList.length} ITEMS)</text>
+  <rect x="44" y="${postSectionY + 10}" width="1032" height="24" rx="6" fill="#1e293b"/>
+  <text x="58" y="${postSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">#</text>
+  <text x="96" y="${postSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">ROOM</text>
+  <text x="235" y="${postSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">CLIENT NPC</text>
+  <text x="408" y="${postSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">OPT</text>
+  <text x="448" y="${postSectionY + 26}" font-size="10.5" font-weight="700" fill="#f8fafc">SELECTED RESPONSE</text>
+  <text x="1062" y="${postSectionY + 26}" text-anchor="end" font-size="10.5" font-weight="700" fill="#f8fafc">RT</text>
 
   ${answerRows}
 
-  <text x="44" y="1324" font-size="10.5" fill="#64748b">Generated by Campus Quest Admin Archive · Record ID: ${escapeXml(record.id)} · Policy: No Delete</text>
+  <text x="44" y="${footerY}" font-size="10.5" fill="#64748b">Generated by Campus Quest Admin Archive · Record ID: ${escapeXml(record.id)} · Policy: No Delete</text>
 </svg>`;
 }
 
@@ -210,14 +252,18 @@ export function buildArchiveCohortSvg(records: QuestArchiveRecord[]): string {
       const y = 148 + i * 32;
       const bg = i % 2 === 0 ? '#f8fafc' : '#ffffff';
       const statusColor = r.archiveStatus === 'archived' ? '#b45309' : '#047857';
+      const genderText = truncateText(
+        formatGenderDisplay(r.demographics.gender, r.demographics.genderOther),
+        14
+      );
       return `
         <rect x="32" y="${y - 20}" width="976" height="30" fill="${bg}"/>
         <text x="48" y="${y}" font-size="12" font-weight="700" fill="#1d4ed8">${escapeXml(r.participant)}</text>
         <text x="150" y="${y}" font-size="12" fill="#0f172a">${escapeXml(truncateText(r.demographics.name || 'Anonymous', 20))}</text>
         <text x="340" y="${y}" font-size="12" fill="#334155">${escapeXml(truncateText(r.demographics.section, 16))}</text>
-        <text x="490" y="${y}" font-size="12" fill="#334155">${r.demographics.age} / ${escapeXml(r.demographics.gender)}</text>
+        <text x="490" y="${y}" font-size="12" fill="#334155">${r.demographics.age} / ${escapeXml(genderText)}</text>
         <text x="615" y="${y}" font-size="12" font-weight="600" fill="#0f172a">${formatDuration(r.durationMs)}</text>
-        <text x="705" y="${y}" font-size="12" fill="#334155">${r.distance}m</text>
+        <text x="705" y="${y}" font-size="12" fill="#334155">${r.preAnswers.length}/${r.totalAnswered}</text>
         <text x="790" y="${y}" font-size="11.5" font-weight="700" fill="${statusColor}">${r.archiveStatus.toUpperCase()}</text>
         <text x="992" y="${y}" text-anchor="end" font-size="11" fill="#64748b">${new Date(r.createdAtMs).toLocaleDateString()}</text>
       `;
@@ -239,7 +285,7 @@ export function buildArchiveCohortSvg(records: QuestArchiveRecord[]): string {
   <text x="340" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">COURSE &amp; SECTION</text>
   <text x="490" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">AGE / GENDER</text>
   <text x="615" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">TIME</text>
-  <text x="705" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">DIST</text>
+  <text x="705" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">ITEMS</text>
   <text x="790" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">STATUS</text>
   <text x="992" y="121" text-anchor="end" font-size="10.5" font-weight="700" fill="#f8fafc">DATE</text>
 

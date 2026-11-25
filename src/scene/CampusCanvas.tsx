@@ -16,17 +16,25 @@ import {
   NpcAnimationController,
   NpcGestureClips,
 } from './npcAnimationController';
-import { CAMPUS_ROOMS, NPC_MODEL_FILES, TOTAL_QUESTIONNAIRES } from '../data/questionnaires';
 import {
+  getRoomsForStage,
+  NPC_MODEL_FILES,
+  TOTAL_PRE_QUESTIONS,
+  TOTAL_QUESTIONNAIRES,
+} from '../data/questionnaires';
+import {
+  AvatarGender,
   CampusMode,
-  GenderOption,
+  DemographicsData,
   OptionLetter,
   PatientQuestion,
+  PreSimulationAnswer,
   QuestionnaireAnswer,
   QuestResult,
   RoomId,
   RoomProgress,
   SimPhase,
+  SimulationStage,
   TelemetryEvent,
 } from '../types';
 
@@ -56,15 +64,8 @@ export interface JoystickInput {
 
 interface CampusCanvasProps {
   phase: SimPhase;
-  selectedGender: GenderOption;
-  demographicsSnapshot: {
-    name: string;
-    age: number;
-    gender: GenderOption;
-    section: string;
-    consented: boolean;
-    consentTimestamp: string;
-  } | null;
+  selectedAvatar: AvatarGender;
+  demographicsSnapshot: DemographicsData | null;
   sessionResetKey: number;
   followCamera: boolean;
   joystickRef: React.MutableRefObject<JoystickInput>;
@@ -82,6 +83,7 @@ interface CampusCanvasProps {
   onTimerTick: (elapsedMs: number) => void;
   onToast: (message: string) => void;
   onPickupSfx: () => void;
+  onPreSimComplete: (answers: PreSimulationAnswer[], durationMs: number) => void;
   onQuestComplete: (result: QuestResult) => void;
 }
 
@@ -316,7 +318,7 @@ function resolveBoxColliders(
 
 export const CampusCanvas: React.FC<CampusCanvasProps> = ({
   phase,
-  selectedGender,
+  selectedAvatar,
   demographicsSnapshot,
   sessionResetKey,
   followCamera,
@@ -332,13 +334,14 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
   onTimerTick,
   onToast,
   onPickupSfx,
+  onPreSimComplete,
   onQuestComplete,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [contextLost, setContextLost] = useState(false);
 
   const phaseRef = useRef<SimPhase>(phase);
-  const genderRef = useRef<GenderOption>(selectedGender);
+  const avatarRef = useRef<AvatarGender>(selectedAvatar);
   const demoRef = useRef(demographicsSnapshot);
   const followCameraRef = useRef<boolean>(followCamera);
   const callbacksRef = useRef({
@@ -350,11 +353,12 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     onTimerTick,
     onToast,
     onPickupSfx,
+    onPreSimComplete,
     onQuestComplete,
   });
 
   phaseRef.current = phase;
-  genderRef.current = selectedGender;
+  avatarRef.current = selectedAvatar;
   demoRef.current = demographicsSnapshot;
   followCameraRef.current = followCamera;
   callbacksRef.current = {
@@ -366,6 +370,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     onTimerTick,
     onToast,
     onPickupSfx,
+    onPreSimComplete,
     onQuestComplete,
   };
 
@@ -716,17 +721,21 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     const telemetry = {
       events: [] as TelemetryEvent[],
       samples: [] as [number, number, number][],
-      distance: 0,
       moveTimeSec: 0,
       t0: performance.now(),
+      preStartPerf: 0,
       questStartPerf: 0,
       nextSampleSec: 0,
       completed: false,
       prevPhase: 'landing' as SimPhase,
     };
 
-    const emitRoomProgress = () => {
-      const progress: RoomProgress[] = CAMPUS_ROOMS.map((room) => {
+    const getActiveStage = (p: SimPhase): SimulationStage =>
+      p === 'pre_briefing' || p === 'pre_playing' ? 'pre' : 'post';
+
+    const emitRoomProgress = (stage: SimulationStage = getActiveStage(phaseRef.current)) => {
+      const stageRooms = getRoomsForStage(stage);
+      const progress: RoomProgress[] = stageRooms.map((room) => {
         const count = answeredByRoom[room.id].length;
         const total = room.questions.length;
         const completed = count >= total;
@@ -754,9 +763,9 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       callbacksRef.current.onActiveQuestionChange(null, null);
     };
 
-    const spawnRoomNpcs = async (roomId: RoomId) => {
+    const spawnRoomNpcs = async (roomId: RoomId, stage: SimulationStage) => {
       clearRoomNpcs();
-      const room = CAMPUS_ROOMS.find((r) => r.id === roomId);
+      const room = getRoomsForStage(stage).find((r) => r.id === roomId);
       if (!room || !sharedNpcWalkClip || !sharedNpcIdleClip || !npcGestureClips) return;
 
       const doneCount = answeredByRoom[roomId].length;
@@ -868,7 +877,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
     const enterRoom = async (roomId: RoomId) => {
       if (enteringRoom) return;
-      const room = CAMPUS_ROOMS.find((r) => r.id === roomId);
+      const stage = getActiveStage(phaseRef.current);
+      const room = getRoomsForStage(stage).find((r) => r.id === roomId);
       if (!room) return;
       if (answeredByRoom[roomId].length >= room.questions.length) {
         reenterCooldownUntil = performance.now() + 1000;
@@ -896,7 +906,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         world.campusGroup.visible = false;
         world.roomGroup.visible = true;
         world.roomInterior.guideArrow.visible = true;
-        world.roomInterior.setRoomSign(`${room.name} · ${room.subtitle}`, room.wallColor);
+        const stageTag = stage === 'pre' ? 'Pre-Sim' : 'Post-Sim';
+        world.roomInterior.setRoomSign(`${stageTag} · ${room.name} · ${room.subtitle}`, room.wallColor);
 
         scene.background = indoorBg.clone();
         scene.fog = new THREE.Fog(0xe6ecf2, 24, 65);
@@ -913,12 +924,12 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
         telemetry.events.push({
           t: Math.round(performance.now() - telemetry.t0),
-          type: 'room_enter',
+          type: stage === 'pre' ? 'pre_room_enter' : 'room_enter',
           roomId,
         });
 
         callbacksRef.current.onModeChange('room_walk', roomId);
-        await spawnRoomNpcs(roomId);
+        await spawnRoomNpcs(roomId, stage);
 
         if (!disposed && activeRoomId === roomId) {
           callbacksRef.current.onToast(`Entered ${room.name}. Finish all 5 questions to unlock exit.`);
@@ -938,7 +949,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
     leaveRoomRef.current = () => {
       if (!activeRoomId) return;
-      const room = CAMPUS_ROOMS.find((r) => r.id === activeRoomId);
+      const stage = getActiveStage(phaseRef.current);
+      const room = getRoomsForStage(stage).find((r) => r.id === activeRoomId);
       if (!room) return;
       const done = answeredByRoom[activeRoomId].length;
       if (done < room.questions.length) {
@@ -956,12 +968,14 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       if (campusMode !== 'seated_first_person' || !activeRoomId || currentDeskNpcIdx === -1) return;
       const npc = roomNpcs[currentDeskNpcIdx];
       if (!npc || npc.state !== 'at_desk') return;
-      const room = CAMPUS_ROOMS.find((r) => r.id === activeRoomId);
+      const stage = getActiveStage(phaseRef.current);
+      const room = getRoomsForStage(stage).find((r) => r.id === activeRoomId);
       if (!room) return;
 
       const nowPerf = performance.now();
+      const stageStartPerf = stage === 'pre' ? telemetry.preStartPerf : telemetry.questStartPerf;
       const responseTimeMs = Math.max(0, Math.round(nowPerf - questionShownAtPerf));
-      const answeredAtMs = Math.max(0, Math.round(nowPerf - telemetry.questStartPerf));
+      const answeredAtMs = Math.max(0, Math.round(nowPerf - stageStartPerf));
 
       const answer: QuestionnaireAnswer = {
         questionId: npc.question.id,
@@ -978,7 +992,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
       telemetry.events.push({
         t: Math.round(nowPerf - telemetry.t0),
-        type: 'answer',
+        type: stage === 'pre' ? 'pre_answer' : 'answer',
         roomId: activeRoomId,
         questionId: npc.question.id,
         selectedOption: option,
@@ -986,7 +1000,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
       callbacksRef.current.onPickupSfx();
       callbacksRef.current.onActiveQuestionChange(null, null);
-      emitRoomProgress();
+      emitRoomProgress(stage);
 
       npc.state = 'acknowledging';
       npc.ackRemaining = 0.55;
@@ -996,9 +1010,66 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
       const totalDone = Object.values(answeredByRoom).reduce((sum, arr) => sum + arr.length, 0);
       const roomDone = answeredByRoom[activeRoomId].length;
+      const stageTotal = stage === 'pre' ? TOTAL_PRE_QUESTIONS : TOTAL_QUESTIONNAIRES;
 
-      if (totalDone >= TOTAL_QUESTIONNAIRES) {
+      if (totalDone >= stageTotal) {
         telemetry.completed = true;
+
+        if (stage === 'pre') {
+          const preDurationMs = Math.max(0, Math.round(nowPerf - telemetry.preStartPerf));
+          telemetry.events.push({
+            t: Math.round(nowPerf - telemetry.t0),
+            type: 'pre_complete',
+          });
+
+          const stageRooms = getRoomsForStage('pre');
+          const preQuestionLookup = new Map<string, PatientQuestion>();
+          stageRooms.forEach((sr) => {
+            sr.questions.forEach((sq) => preQuestionLookup.set(sq.id, sq));
+          });
+
+          const preAnswers: PreSimulationAnswer[] = [
+            ...answeredByRoom.classroom,
+            ...answeredByRoom.library,
+            ...answeredByRoom.canteen,
+            ...answeredByRoom.principal,
+          ]
+            .map((a) => {
+              const meta = preQuestionLookup.get(a.questionId);
+              return {
+                questionId: a.questionId,
+                itemNumber: meta?.itemNumber ?? a.patientIndex,
+                areaTitle: meta?.areaTitle ?? room.subtitle,
+                selectedOption: a.selectedOption,
+                selectedText: a.selectedText,
+                responseTimeMs: a.responseTimeMs,
+                answeredAtMs: a.answeredAtMs,
+              };
+            })
+            .sort((a, b) => a.itemNumber - b.itemNumber);
+
+          window.setTimeout(() => {
+            if (!disposed) {
+              clearRoomNpcs();
+              campusMode = 'outdoor';
+              activeRoomId = null;
+              world.campusGroup.visible = true;
+              world.roomGroup.visible = false;
+              scene.background = outdoorSky;
+              scene.fog = createOutdoorFog();
+              player.x = 0;
+              player.z = 0;
+              player.heading = 0;
+              camYaw = 0;
+              moveBasisYaw = 0;
+              snapNextCamera = true;
+              callbacksRef.current.onModeChange('outdoor', null);
+              callbacksRef.current.onPreSimComplete(preAnswers, preDurationMs);
+            }
+          }, 620);
+          return;
+        }
+
         const durationMs = Math.max(0, Math.round(nowPerf - telemetry.questStartPerf));
         telemetry.events.push({
           t: Math.round(nowPerf - telemetry.t0),
@@ -1019,23 +1090,25 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         ].sort((a, b) => a.answeredAtMs - b.answeredAtMs);
 
         const demo = demoRef.current;
-        const activeGender = genderRef.current;
+        const activeAvatar = avatarRef.current;
         const result: QuestResult = {
           participant: participantCode,
           demographics: {
             name: demo?.name.trim() ? demo.name.trim() : null,
             age: demo?.age ?? 0,
-            gender: activeGender,
+            gender: demo?.gender ?? activeAvatar,
+            genderOther: demo?.gender === 'other' ? (demo.genderOther ?? '').trim() : '',
             section: demo?.section ?? '',
             consented: Boolean(demo?.consented),
             consentTimestamp: demo?.consentTimestamp ?? new Date().toISOString(),
           },
-          character: activeGender,
+          character: activeAvatar,
           durationMs,
+          preDurationMs: 0,
           totalAnswered: allAnswers.length,
           roomOrder: [...roomOrder],
+          preAnswers: [],
           answers: allAnswers,
-          distance: +telemetry.distance.toFixed(1),
           moveTimeMs: Math.round(telemetry.moveTimeSec * 1000),
           events: telemetry.events,
           samples: telemetry.samples,
@@ -1061,6 +1134,64 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           }
         }, 1250);
       }
+    };
+
+    const beginSimulationStage = (stage: SimulationStage, nowPerf: number) => {
+      clearRoomNpcs();
+      player.x = 0;
+      player.z = 0;
+      player.heading = 0;
+      campusMode = 'outdoor';
+      activeRoomId = null;
+      reenterCooldownUntil = 0;
+      enteringRoom = false;
+      camYaw = 0;
+      moveBasisYaw = 0;
+      camPitch = 0.34;
+      camDist = 5.8;
+      fpYaw = 0;
+      fpPitch = 0;
+      snapNextCamera = true;
+      wasTurningInput = false;
+
+      world.campusGroup.visible = true;
+      world.roomGroup.visible = false;
+      scene.background = outdoorSky;
+      scene.fog = createOutdoorFog();
+
+      answeredByRoom.classroom = [];
+      answeredByRoom.library = [];
+      answeredByRoom.canteen = [];
+      answeredByRoom.principal = [];
+      roomOrder.length = 0;
+
+      telemetry.completed = false;
+      telemetry.nextSampleSec = 0;
+      if (stage === 'pre') {
+        telemetry.preStartPerf = nowPerf;
+        telemetry.events.push({
+          t: Math.round(nowPerf - telemetry.t0),
+          type: 'pre_begin',
+          character: avatarRef.current,
+          gender: demoRef.current?.gender ?? avatarRef.current,
+          section: demoRef.current?.section,
+        });
+      } else {
+        telemetry.questStartPerf = nowPerf;
+        telemetry.samples = [];
+        telemetry.events.push({
+          t: Math.round(nowPerf - telemetry.t0),
+          type: 'quest_begin',
+          character: avatarRef.current,
+          gender: demoRef.current?.gender ?? avatarRef.current,
+          section: demoRef.current?.section,
+        });
+      }
+
+      emitRoomProgress(stage);
+      callbacksRef.current.onModeChange('outdoor', null);
+      callbacksRef.current.onActiveQuestionChange(null, null);
+      callbacksRef.current.onTimerTick(0);
     };
 
     const resetSession = () => {
@@ -1094,15 +1225,15 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
       telemetry.events = [];
       telemetry.samples = [];
-      telemetry.distance = 0;
       telemetry.moveTimeSec = 0;
       telemetry.t0 = performance.now();
+      telemetry.preStartPerf = 0;
       telemetry.questStartPerf = 0;
       telemetry.nextSampleSec = 0;
       telemetry.completed = false;
       telemetry.prevPhase = 'landing';
 
-      emitRoomProgress();
+      emitRoomProgress('pre');
       callbacksRef.current.onModeChange('outdoor', null);
       callbacksRef.current.onActiveQuestionChange(null, null);
       callbacksRef.current.onTimerTick(0);
@@ -1215,41 +1346,43 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       const dt = Math.min(0.05, (nowPerf - lastTime) / 1000);
       lastTime = nowPerf;
       const currentPhase = phaseRef.current;
-      const activeGender = genderRef.current;
+      const activeAvatar = avatarRef.current;
 
       if (telemetry.prevPhase !== currentPhase) {
-        if (currentPhase === 'playing') {
+        if (currentPhase === 'pre_playing') {
+          beginSimulationStage('pre', nowPerf);
+        } else if (currentPhase === 'post_playing') {
+          beginSimulationStage('post', nowPerf);
+        } else if (currentPhase === 'pre_briefing' || currentPhase === 'post_briefing') {
           snapNextCamera = true;
-        }
-        if (currentPhase === 'playing' && telemetry.questStartPerf === 0) {
-          telemetry.questStartPerf = nowPerf;
-          telemetry.events.push({
-            t: Math.round(nowPerf - telemetry.t0),
-            type: 'quest_begin',
-            character: activeGender,
-            gender: activeGender,
-            section: demoRef.current?.section,
-          });
         }
         telemetry.prevPhase = currentPhase;
       }
 
-      const activeRig = activeGender === 'female' ? playerRigs.female : playerRigs.male;
-      const inactiveRig = activeGender === 'female' ? playerRigs.male : playerRigs.female;
+      const activeRig = activeAvatar === 'female' ? playerRigs.female : playerRigs.male;
+      const inactiveRig = activeAvatar === 'female' ? playerRigs.male : playerRigs.female;
 
       if (inactiveRig) {
         inactiveRig.group.visible = false;
       }
 
       if (activeRig) {
-        if (currentPhase === 'landing' || currentPhase === 'briefing') {
+        const isStaticPreview =
+          currentPhase === 'landing' ||
+          currentPhase === 'pre_briefing' ||
+          currentPhase === 'post_briefing';
+        const isSimPlaying = currentPhase === 'pre_playing' || currentPhase === 'post_playing';
+        const activeStage = getActiveStage(currentPhase);
+
+        if (isStaticPreview) {
           activeRig.group.visible = true;
           activeRig.walkWeight = THREE.MathUtils.damp(activeRig.walkWeight, 0, 8, dt);
           activeRig.walkAction.setEffectiveWeight(activeRig.walkWeight);
           activeRig.idleAction.setEffectiveWeight(1 - activeRig.walkWeight);
           activeRig.mixer.update(dt);
           activeRig.group.position.set(0, 0, 0);
-          activeRig.group.rotation.y = currentPhase === 'landing' ? Math.sin(nowPerf * 0.0006) * 0.32 : 0;
+          activeRig.group.rotation.y =
+            currentPhase === 'landing' ? Math.sin(nowPerf * 0.0006) * 0.32 : 0;
 
           const vw = container.clientWidth || window.innerWidth;
           const vh = container.clientHeight || window.innerHeight;
@@ -1274,11 +1407,13 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
           }
           camera.lookAt(_lookTarget);
         } else {
-          if (currentPhase === 'playing' && !telemetry.completed) {
-            const elapsedMs = Math.max(0, Math.round(nowPerf - telemetry.questStartPerf));
+          if (isSimPlaying && !telemetry.completed) {
+            const stageStart =
+              activeStage === 'pre' ? telemetry.preStartPerf : telemetry.questStartPerf;
+            const elapsedMs = Math.max(0, Math.round(nowPerf - stageStart));
             callbacksRef.current.onTimerTick(elapsedMs);
 
-            if (elapsedMs >= telemetry.nextSampleSec * 1000) {
+            if (activeStage === 'post' && elapsedMs >= telemetry.nextSampleSec * 1000) {
               telemetry.nextSampleSec += 1;
               telemetry.samples.push([elapsedMs, +player.x.toFixed(2), +player.z.toFixed(2)]);
             }
@@ -1299,7 +1434,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
                   npc.group.rotation.y = Math.PI;
                   npc.anim.setState('greeting');
                   questionShownAtPerf = performance.now();
-                  const room = CAMPUS_ROOMS.find((r) => r.id === activeRoomId);
+                  const room = getRoomsForStage(activeStage).find((r) => r.id === activeRoomId);
                   if (room) {
                     callbacksRef.current.onActiveQuestionChange(npc.question, {
                       roomName: room.name,
@@ -1362,7 +1497,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
             let ax = 0;
             let ay = 0;
             let mag = 0;
-            if (currentPhase === 'playing' && !telemetry.completed && !enteringRoom) {
+            if (isSimPlaying && !telemetry.completed && !enteringRoom) {
               ax = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
               ay = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
               if (joystickRef.current.active) {
@@ -1407,8 +1542,6 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
             if (mag > 0.05) {
               const speed = (campusMode === 'room_walk' ? 2.4 : 2.8) * mag;
-              const prevX = player.x;
-              const prevZ = player.z;
 
               if (campusMode === 'outdoor') {
                 player.x = THREE.MathUtils.clamp(player.x + dx * speed * dt, -24.2, 24.2);
@@ -1443,7 +1576,6 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
                 player.z = THREE.MathUtils.clamp(player.z, -5.8, 6.8);
               }
 
-              telemetry.distance += Math.hypot(player.x - prevX, player.z - prevZ);
               telemetry.moveTimeSec += dt;
 
               let deltaH = Math.atan2(dx, dz) - player.heading;
@@ -1473,7 +1605,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
               const chair = world.roomInterior.chairPos;
               if (
-                currentPhase === 'playing' &&
+                isSimPlaying &&
                 !enteringRoom &&
                 roomNpcs.length > 0 &&
                 Math.hypot(player.x - chair.x, player.z - chair.z) < 1.25
@@ -1485,7 +1617,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
                 callbacksRef.current.onModeChange('seated_first_person', activeRoomId);
                 callNextPatientToDesk();
               }
-            } else if (campusMode === 'outdoor' && currentPhase === 'playing' && nowPerf > reenterCooldownUntil) {
+            } else if (campusMode === 'outdoor' && isSimPlaying && nowPerf > reenterCooldownUntil) {
               for (const entrance of world.entrances) {
                 if (Math.hypot(player.x - entrance.x, player.z - entrance.z) < 1.5) {
                   void enterRoom(entrance.roomId);

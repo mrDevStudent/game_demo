@@ -21,7 +21,7 @@
     },
     "QuestSubmission": {
       "title": "QuestSubmission",
-      "description": "Archived Campus Quest spatial navigation and 20-item questionnaire session record. Supports creation by participants and archival/editing by admins; deletion is forbidden.",
+      "description": "Archived Campus Quest spatial navigation, 20-item Pre-Simulation, and 20-item Post-Simulation questionnaire session record. Supports creation by participants and archival/editing by admins; deletion is forbidden.",
       "type": "object",
       "properties": {
         "participant": {
@@ -33,7 +33,7 @@
         },
         "demographics": {
           "type": "object",
-          "description": "Participant demographic and consent snapshot."
+          "description": "Participant demographic (Name, Age, Gender with Other specification, Course & Section) and consent snapshot."
         },
         "character": {
           "type": "string",
@@ -42,23 +42,27 @@
         },
         "durationMs": {
           "type": "number",
-          "description": "Total quest completion duration in milliseconds."
+          "description": "Total 3D simulation completion duration in milliseconds."
+        },
+        "preDurationMs": {
+          "type": "number",
+          "description": "Pre-Simulation 20-item completion duration in milliseconds."
         },
         "totalAnswered": {
           "type": "number",
-          "description": "Total questionnaires answered (20 on completion)."
+          "description": "Total Post-Simulation room questionnaires answered (20 on completion)."
         },
         "roomOrder": {
           "type": "array",
           "description": "Order in which the 4 campus rooms were visited."
         },
+        "preAnswers": {
+          "type": "array",
+          "description": "List of 20 recorded Pre-Simulation scenario responses (A/B/C/D)."
+        },
         "answers": {
           "type": "array",
-          "description": "List of 20 recorded questionnaire responses."
-        },
-        "distance": {
-          "type": "number",
-          "description": "Total distance walked in meters."
+          "description": "List of 20 recorded Post-Simulation room questionnaire responses (A/B/C/D)."
         },
         "moveTimeMs": {
           "type": "number",
@@ -106,7 +110,6 @@
         "totalAnswered",
         "roomOrder",
         "answers",
-        "distance",
         "moveTimeMs",
         "events",
         "samples",

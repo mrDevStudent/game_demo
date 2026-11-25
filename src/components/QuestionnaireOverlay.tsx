@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { OptionLetter, PatientQuestion } from '../types';
+import { OptionLetter, PatientQuestion, SimulationStage } from '../types';
 
 interface QuestionnaireOverlayProps {
+  stage: SimulationStage;
   question: PatientQuestion | null;
   roomCounter: { roomName: string; current: number; total: number } | null;
   totalAnswered: number;
@@ -12,6 +13,7 @@ interface QuestionnaireOverlayProps {
 const OPTION_LETTERS: OptionLetter[] = ['A', 'B', 'C', 'D'];
 
 export const QuestionnaireOverlay: React.FC<QuestionnaireOverlayProps> = ({
+  stage,
   question,
   roomCounter,
   totalAnswered,
@@ -57,7 +59,7 @@ export const QuestionnaireOverlay: React.FC<QuestionnaireOverlayProps> = ({
 
   return (
     <div className="pointer-events-none fixed bottom-2.5 sm:bottom-3 lg:bottom-5 left-1/2 -translate-x-1/2 z-20 w-[min(780px,calc(100vw-1.5rem))]">
-      <div className="pointer-events-auto max-h-[58dvh] lg:max-h-none overflow-y-auto rounded-2xl bg-white/95 border border-slate-200 shadow-xl p-3 sm:p-4 lg:p-6 text-slate-900">
+      <div className="pointer-events-auto max-h-[62dvh] lg:max-h-[70dvh] overflow-y-auto rounded-2xl bg-white/95 border border-slate-200 shadow-xl p-3 sm:p-4 lg:p-6 text-slate-900">
         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] lg:text-xs text-slate-500 mb-1.5 lg:mb-2">
           <div className="flex items-center gap-2 font-medium">
             <span className="font-semibold text-blue-700">{roomCounter.roomName}</span>
@@ -67,11 +69,11 @@ export const QuestionnaireOverlay: React.FC<QuestionnaireOverlayProps> = ({
             <span>{question.patientRole}</span>
           </div>
           <div className="font-mono-tabular font-semibold text-slate-600">
-            Client {roomCounter.current}/{roomCounter.total} · Total {totalAnswered}/{totalQuestionnaires}
+            {stage === 'pre' ? 'Pre-Sim' : 'Post-Sim'} {roomCounter.current}/{roomCounter.total} · Total {totalAnswered}/{totalQuestionnaires}
           </div>
         </div>
 
-        <h3 className="font-display text-sm sm:text-base lg:text-lg font-bold text-slate-900 leading-snug mb-2.5 lg:mb-3.5">
+        <h3 className="font-display text-sm sm:text-base lg:text-[17px] font-bold text-slate-900 leading-snug mb-2.5 lg:mb-3.5">
           {question.prompt}
         </h3>
 
