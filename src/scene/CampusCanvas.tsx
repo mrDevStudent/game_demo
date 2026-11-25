@@ -8,7 +8,9 @@ import {
   buildCampusWorld,
   CameraBox,
   CampusWorld,
+  loadMountainBackground,
 } from './campusGeometry';
+import { createSunsetSkyboxTexture, SUNSET_SKYBOX_CONFIG } from './skyboxBuilder';
 import {
   createNpcGestureClips,
   NpcAnimationController,
@@ -64,6 +66,7 @@ interface CampusCanvasProps {
     consentTimestamp: string;
   } | null;
   sessionResetKey: number;
+  followCamera: boolean;
   joystickRef: React.MutableRefObject<JoystickInput>;
   submitAnswerRef: React.MutableRefObject<((option: OptionLetter) => void) | null>;
   leaveRoomRef: React.MutableRefObject<(() => void) | null>;
@@ -316,6 +319,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
   selectedGender,
   demographicsSnapshot,
   sessionResetKey,
+  followCamera,
   joystickRef,
   submitAnswerRef,
   leaveRoomRef,
@@ -336,6 +340,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
   const phaseRef = useRef<SimPhase>(phase);
   const genderRef = useRef<GenderOption>(selectedGender);
   const demoRef = useRef(demographicsSnapshot);
+  const followCameraRef = useRef<boolean>(followCamera);
   const callbacksRef = useRef({
     onModelsLoaded,
     onModelsError,
@@ -351,6 +356,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
   phaseRef.current = phase;
   genderRef.current = selectedGender;
   demoRef.current = demographicsSnapshot;
+  followCameraRef.current = followCamera;
   callbacksRef.current = {
     onModelsLoaded,
     onModelsError,
@@ -403,10 +409,11 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     renderer.domElement.addEventListener('webglcontextrestored', onContextRestored);
 
     const scene = new THREE.Scene();
-    const outdoorBg = new THREE.Color(0xc2daef);
+    const outdoorSky = createSunsetSkyboxTexture();
     const indoorBg = new THREE.Color(0xe6ecf2);
-    scene.background = outdoorBg.clone();
-    scene.fog = new THREE.Fog(0xc2daef, 36, 98);
+    const createOutdoorFog = () => new THREE.Fog(SUNSET_SKYBOX_CONFIG.horizonFogColor, 130, 820);
+    scene.background = outdoorSky;
+    scene.fog = createOutdoorFog();
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const roomEnv = new RoomEnvironment();
@@ -415,14 +422,14 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     roomEnv.dispose();
     pmremGenerator.dispose();
 
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 220);
+    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 2200);
     camera.position.set(-1.45, 1.55, 4.75);
     camera.lookAt(-1.45, 1.05, 0);
 
-    const hemiLight = new THREE.HemisphereLight(0xf8fafc, 0x5c7356, 0.68);
+    const hemiLight = new THREE.HemisphereLight(0xffedd5, 0x4e664b, 0.72);
     scene.add(hemiLight);
 
-    const sunLight = new THREE.DirectionalLight(0xfff7ed, 1.1);
+    const sunLight = new THREE.DirectionalLight(0xffe5c4, 1.15);
     sunLight.position.set(12, 22, 10);
     sunLight.castShadow = !isSoftwareGl;
     sunLight.shadow.mapSize.set(2048, 2048);
@@ -439,7 +446,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     scene.add(sunLight);
     scene.add(sunLight.target);
 
-    const rimLight = new THREE.DirectionalLight(0xdbeafe, 0.35);
+    const rimLight = new THREE.DirectionalLight(0xc7d2fe, 0.38);
     rimLight.position.set(-14, 12, -16);
     scene.add(rimLight);
 
@@ -464,6 +471,10 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
     let disposed = false;
     let enteringRoom = false;
+
+    void loadMountainBackground(world.campusGroup, () => disposed).catch((err) => {
+      console.warn('Mountain background failed to load:', err);
+    });
 
     const sleepMs = (ms: number) =>
       new Promise<void>((resolve) => {
@@ -675,11 +686,16 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
     let reenterCooldownUntil = 0;
 
     let camYaw = 0;
+    let moveBasisYaw = 0;
     let camPitch = 0.34;
     let camDist = 5.8;
     let fpYaw = 0;
     let fpPitch = 0;
     let snapNextCamera = true;
+    let dragCooldown = 0;
+    let wasFollowCamera = followCameraRef.current;
+    let wasTurningInput = false;
+    const smoothLookPos = new THREE.Vector3(0, 1.35, 0);
 
     const keys: Record<string, boolean> = {};
     let dragPointerId: number | null = null;
@@ -827,8 +843,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
       world.campusGroup.visible = true;
       world.roomGroup.visible = false;
-      scene.background = outdoorBg.clone();
-      scene.fog = new THREE.Fog(0xc2daef, 36, 98);
+      scene.background = outdoorSky;
+      scene.fog = createOutdoorFog();
 
       if (entrance) {
         player.x = entrance.exitX;
@@ -840,9 +856,11 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         player.heading = 0;
       }
       camYaw = 0;
+      moveBasisYaw = 0;
       camPitch = 0.34;
       camDist = 5.8;
       snapNextCamera = true;
+      wasTurningInput = false;
 
       callbacksRef.current.onModeChange('outdoor', null);
       if (toastMsg) callbacksRef.current.onToast(toastMsg);
@@ -887,9 +905,11 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         player.z = 5.0;
         player.heading = Math.PI * 0.9;
         camYaw = -0.32;
+        moveBasisYaw = -0.32;
         camPitch = 0.34;
         camDist = 4.2;
         snapNextCamera = true;
+        wasTurningInput = false;
 
         telemetry.events.push({
           t: Math.round(performance.now() - telemetry.t0),
@@ -1053,16 +1073,18 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       reenterCooldownUntil = 0;
       enteringRoom = false;
       camYaw = 0;
+      moveBasisYaw = 0;
       camPitch = 0.34;
       camDist = 5.8;
       fpYaw = 0;
       fpPitch = 0;
       snapNextCamera = true;
+      wasTurningInput = false;
 
       world.campusGroup.visible = true;
       world.roomGroup.visible = false;
-      scene.background = outdoorBg.clone();
-      scene.fog = new THREE.Fog(0xc2daef, 36, 98);
+      scene.background = outdoorSky;
+      scene.fog = createOutdoorFog();
 
       answeredByRoom.classroom = [];
       answeredByRoom.library = [];
@@ -1123,6 +1145,8 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
         fpPitch = THREE.MathUtils.clamp(fpPitch - dy * 0.003, -0.22, 0.22);
       } else {
         camYaw -= dx * 0.006;
+        moveBasisYaw = camYaw;
+        dragCooldown = 0.65;
         camPitch = THREE.MathUtils.clamp(camPitch + dy * 0.004, 0.08, 1.18);
       }
       lastDrag = [e.clientX, e.clientY];
@@ -1163,6 +1187,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
     const _camDesired = new THREE.Vector3();
     const _lookTarget = new THREE.Vector3();
+    const _clipOrigin = new THREE.Vector3();
     let frameId = 0;
     let lastTime = performance.now();
 
@@ -1347,8 +1372,33 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
               mag = Math.min(1, Math.hypot(ax, ay));
             }
 
-            const sinYaw = Math.sin(camYaw);
-            const cosYaw = Math.cos(camYaw);
+            const isFollowFacing = followCameraRef.current;
+            if (isFollowFacing !== wasFollowCamera) {
+              moveBasisYaw = camYaw;
+              wasTurningInput = false;
+              wasFollowCamera = isFollowFacing;
+            }
+            if (dragPointerId !== null) {
+              dragCooldown = 0.65;
+            } else if (dragCooldown > 0) {
+              dragCooldown = Math.max(0, dragCooldown - dt);
+            }
+
+            const hasMoveInput = mag > 0.05;
+            const isPureForward = hasMoveInput && ay > 0.25 && Math.abs(ax) < 0.1;
+            const isTurningInput = hasMoveInput && !isPureForward;
+
+            if (!isFollowFacing || !hasMoveInput || isPureForward) {
+              moveBasisYaw = camYaw;
+              wasTurningInput = false;
+            } else if (isTurningInput && !wasTurningInput) {
+              moveBasisYaw = camYaw;
+              wasTurningInput = true;
+            }
+
+            const activeBasisYaw = isFollowFacing && isTurningInput ? moveBasisYaw : camYaw;
+            const sinYaw = Math.sin(activeBasisYaw);
+            const cosYaw = Math.cos(activeBasisYaw);
             let dx = -sinYaw * ay + cosYaw * ax;
             let dz = -cosYaw * ay - sinYaw * ax;
             const dLen = Math.hypot(dx, dz) || 1;
@@ -1398,6 +1448,9 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
 
               let deltaH = Math.atan2(dx, dz) - player.heading;
               deltaH = Math.atan2(Math.sin(deltaH), Math.cos(deltaH));
+              if (Math.abs(Math.abs(deltaH) - Math.PI) < 0.01) {
+                deltaH = Math.PI;
+              }
               player.heading += deltaH * Math.min(1, dt * 12);
             }
 
@@ -1441,32 +1494,53 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
               }
             }
 
+            if (isFollowFacing && dragPointerId === null && dragCooldown <= 0) {
+              const desiredYaw = player.heading + Math.PI;
+              const yawDelta = Math.atan2(
+                Math.sin(desiredYaw - camYaw),
+                Math.cos(desiredYaw - camYaw)
+              );
+              camYaw += yawDelta * (1 - Math.exp(-3.8 * dt));
+            }
+
             const effectiveDist = campusMode === 'room_walk' ? Math.min(camDist, 6.2) : camDist;
-            const tx = player.x;
-            const ty = 1.35;
-            const tz = player.z;
-            _lookTarget.set(tx, ty, tz);
+            const leadAmount = isFollowFacing && mag > 0.05 ? 0.35 * mag : 0;
+            const targetX = player.x + (mag > 0.05 ? dx * leadAmount : 0);
+            const targetY = 1.35;
+            const targetZ = player.z + (mag > 0.05 ? dz * leadAmount : 0);
+
+            if (snapNextCamera) {
+              smoothLookPos.set(targetX, targetY, targetZ);
+            } else {
+              const targetSmoothAlpha = 1 - Math.exp(-(isFollowFacing ? 7.5 : 11) * dt);
+              smoothLookPos.x = THREE.MathUtils.lerp(smoothLookPos.x, targetX, targetSmoothAlpha);
+              smoothLookPos.y = targetY;
+              smoothLookPos.z = THREE.MathUtils.lerp(smoothLookPos.z, targetZ, targetSmoothAlpha);
+            }
+
+            _clipOrigin.set(player.x, 1.35, player.z);
+            _lookTarget.copy(smoothLookPos);
             _camDesired.set(
-              tx + Math.sin(camYaw) * Math.cos(camPitch) * effectiveDist,
-              Math.max(0.55, ty + Math.sin(camPitch) * effectiveDist),
-              tz + Math.cos(camYaw) * Math.cos(camPitch) * effectiveDist
+              smoothLookPos.x + Math.sin(camYaw) * Math.cos(camPitch) * effectiveDist,
+              Math.max(0.55, smoothLookPos.y + Math.sin(camPitch) * effectiveDist),
+              smoothLookPos.z + Math.cos(camYaw) * Math.cos(camPitch) * effectiveDist
             );
 
             if (campusMode === 'room_walk') {
-              clampCameraInsideBox(_lookTarget, _camDesired, world.roomInterior.roomCameraBounds);
+              clampCameraInsideBox(_clipOrigin, _camDesired, world.roomInterior.roomCameraBounds);
             } else {
-              clipCameraOutsideBoxes(_lookTarget, _camDesired, world.outdoorCameraObstacles);
+              clipCameraOutsideBoxes(_clipOrigin, _camDesired, world.outdoorCameraObstacles);
             }
 
             if (snapNextCamera) {
               camera.position.copy(_camDesired);
               snapNextCamera = false;
             } else {
-              camera.position.lerp(_camDesired, 1 - Math.exp(-10 * dt));
+              camera.position.lerp(_camDesired, 1 - Math.exp(-8.5 * dt));
               if (campusMode === 'room_walk') {
-                clampCameraInsideBox(_lookTarget, camera.position, world.roomInterior.roomCameraBounds);
+                clampCameraInsideBox(_clipOrigin, camera.position, world.roomInterior.roomCameraBounds);
               } else {
-                clipCameraOutsideBoxes(_lookTarget, camera.position, world.outdoorCameraObstacles);
+                clipCameraOutsideBoxes(_clipOrigin, camera.position, world.outdoorCameraObstacles);
               }
             }
             camera.lookAt(_lookTarget);
@@ -1517,6 +1591,7 @@ export const CampusCanvas: React.FC<CampusCanvasProps> = ({
       canvasEl.removeEventListener('webglcontextrestored', onContextRestored);
 
       world.dispose();
+      outdoorSky.dispose();
       envTex.dispose();
       renderer.dispose();
       if (canvasEl.parentNode === container) {

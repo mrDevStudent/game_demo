@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
+import { Camera, Maximize2, Minimize2, ShieldCheck, VideoOff, Volume2, VolumeX } from 'lucide-react';
 import { CampusCanvas, JoystickInput } from './scene/CampusCanvas';
 import { DemographicsLanding } from './components/DemographicsLanding';
 import { BriefingOverlay } from './components/BriefingOverlay';
@@ -50,6 +50,7 @@ export default function App() {
   const [sessionResetKey, setSessionResetKey] = useState(0);
   const [muted, setMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [followCamera, setFollowCamera] = useState(false);
 
   const joystickRef = useRef<JoystickInput>({ active: false, x: 0, y: 0 });
   const submitAnswerRef = useRef<((option: OptionLetter) => void) | null>(null);
@@ -82,6 +83,15 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const toggleFollowCamera = useCallback(() => {
+    soundEngine.playSfx('click');
+    setFollowCamera((prev) => {
+      const next = !prev;
+      showToast(next ? 'Follow Facing Camera: ON' : 'Follow Facing Camera: OFF');
+      return next;
+    });
+  }, [showToast]);
 
   const toggleFullscreen = useCallback(() => {
     try {
@@ -150,20 +160,29 @@ export default function App() {
       }
       if (e.code === 'KeyM') toggleMute();
       if (e.code === 'KeyF' && fullscreenSupported) toggleFullscreen();
+      if (e.code === 'KeyC' && phase === 'playing' && campusMode !== 'seated_first_person') {
+        toggleFollowCamera();
+      }
+    };
+
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
     };
 
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('contextmenu', onContextMenu, { capture: true });
 
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('contextmenu', onContextMenu, { capture: true });
     };
-  }, [fullscreenSupported, toggleFullscreen, toggleMute]);
+  }, [campusMode, fullscreenSupported, phase, toggleFollowCamera, toggleFullscreen, toggleMute]);
 
   const handleModelsLoaded = useCallback(() => {
     setModelsLoaded(true);
@@ -266,13 +285,17 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="relative w-screen h-screen overflow-hidden bg-[#c2daef] select-none">
+      <div
+        onContextMenu={(e) => e.preventDefault()}
+        className="relative w-screen h-screen overflow-hidden bg-[#c2daef] select-none"
+      >
         {/* Unobstructed 3D Campus & Room Viewport */}
         <CampusCanvas
           phase={phase}
           selectedGender={selectedGender}
           demographicsSnapshot={demographics}
           sessionResetKey={sessionResetKey}
+          followCamera={followCamera}
           joystickRef={joystickRef}
           submitAnswerRef={submitAnswerRef}
           leaveRoomRef={leaveRoomRef}
@@ -288,8 +311,38 @@ export default function App() {
           onQuestComplete={handleQuestComplete}
         />
 
-        {/* Top-Right Global Controls (Admin, Audio, Fullscreen) */}
+        {/* Top-Right Global Controls (Camera Toggle, Admin, Audio, Fullscreen) */}
         <div className="fixed right-3 top-3 sm:right-4 sm:top-4 z-30 flex items-center gap-1.5 sm:gap-2">
+          {phase === 'playing' && campusMode !== 'seated_first_person' && (
+            <button
+              type="button"
+              onClick={toggleFollowCamera}
+              aria-pressed={followCamera}
+              title={
+                followCamera
+                  ? 'Camera follows player facing: ON (C)'
+                  : 'Camera follows player facing: OFF (C)'
+              }
+              aria-label={
+                followCamera ? 'Follow facing camera on' : 'Follow facing camera off'
+              }
+              className={`h-10 px-2.5 sm:px-3.5 flex items-center gap-1.5 rounded-xl border shadow-sm text-xs font-semibold transition-colors whitespace-nowrap ${
+                followCamera
+                  ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-white/95 border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {followCamera ? (
+                <Camera className="w-4 h-4 shrink-0" />
+              ) : (
+                <VideoOff className="w-4 h-4 shrink-0" />
+              )}
+              <span className="hidden sm:inline">
+                {followCamera ? 'Cam: On' : 'Cam: Off'}
+              </span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {

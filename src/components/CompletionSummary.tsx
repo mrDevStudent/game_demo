@@ -110,7 +110,7 @@ export const CompletionSummary: React.FC<CompletionSummaryProps> = ({
             </span>
           </div>
           <div className="flex justify-between">
-            <span>Age / Section</span>
+            <span>Age / Course &amp; Section</span>
             <span className="font-semibold text-slate-900">
               {result.demographics.age} · {result.demographics.section}
             </span>

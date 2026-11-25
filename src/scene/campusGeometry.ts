@@ -1,6 +1,16 @@
 import * as THREE from 'three';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { CAMPUS_ROOMS } from '../data/questionnaires';
-import { RoomConfig, RoomId } from '../types';
+import { RoomId } from '../types';
+import {
+  buildBroadleafTree,
+  buildDetailedBuilding,
+  buildGatePillar,
+  buildLampPost,
+  buildParkBench,
+  buildPlanterHedge,
+  createCampusDetailTextures,
+} from './campusDetails';
 
 export interface BoxCollider {
   x: number;
@@ -162,7 +172,7 @@ function createMeadowTexture(maxAnisotropy: number): THREE.CanvasTexture {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(28, 28);
+  tex.repeat.set(220, 220);
   tex.anisotropy = maxAnisotropy;
   return tex;
 }
@@ -199,91 +209,6 @@ function createRoomFloorTexture(maxAnisotropy: number): THREE.CanvasTexture {
   tex.repeat.set(5, 4);
   tex.anisotropy = maxAnisotropy;
   return tex;
-}
-
-function buildCompositeBuilding(spec: RoomConfig): { group: THREE.Group; collider: BoxCollider } {
-  const group = new THREE.Group();
-  group.position.set(spec.x, 0, spec.z);
-
-  const plinthMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.9, metalness: 0.05 });
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.45, 8.6), plinthMat);
-  plinth.position.y = 0.225;
-  plinth.receiveShadow = true;
-  plinth.castShadow = true;
-  group.add(plinth);
-
-  const wallMat = new THREE.MeshStandardMaterial({ color: spec.wallColor, roughness: 0.82, metalness: 0.04 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(10, 4.8, 8), wallMat);
-  body.position.y = 2.85;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
-
-  const trimMat = new THREE.MeshStandardMaterial({ color: spec.trimColor, roughness: 0.55, metalness: 0.15 });
-  const cornice = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.35, 8.4), trimMat);
-  cornice.position.y = 5.35;
-  cornice.castShadow = true;
-  group.add(cornice);
-
-  const roofMat = new THREE.MeshStandardMaterial({ color: spec.roofColor, roughness: 0.68, metalness: 0.08 });
-  const roofBase = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.45, 8.8), roofMat);
-  roofBase.position.y = 5.75;
-  roofBase.castShadow = true;
-  roofBase.receiveShadow = true;
-  group.add(roofBase);
-
-  const roofCap = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.55, 6.6), roofMat);
-  roofCap.position.y = 6.22;
-  roofCap.castShadow = true;
-  group.add(roofCap);
-
-  const doorFaceZ = spec.facingSign * 4.02;
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.45, metalness: 0.35 });
-  const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.2, 0.24), frameMat);
-  doorFrame.position.set(0, 1.85, doorFaceZ);
-  group.add(doorFrame);
-
-  const doorGlassMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2, metalness: 0.45 });
-  const doorLeaf = new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.85, 0.28), doorGlassMat);
-  doorLeaf.position.set(0, 1.72, doorFaceZ);
-  group.add(doorLeaf);
-
-  const canopy = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 1.35), trimMat);
-  canopy.position.set(0, 3.68, doorFaceZ + spec.facingSign * 0.58);
-  canopy.castShadow = true;
-  group.add(canopy);
-
-  const step = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.22, 1.05), plinthMat);
-  step.position.set(0, 0.11, doorFaceZ + spec.facingSign * 0.48);
-  step.receiveShadow = true;
-  group.add(step);
-
-  const winGlassMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.16, metalness: 0.32 });
-  [-3.1, 3.1].forEach((wx) => {
-    const wFrame = new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.65, 0.16), frameMat);
-    wFrame.position.set(wx, 2.95, doorFaceZ);
-    const wPane = new THREE.Mesh(new THREE.BoxGeometry(1.45, 1.35, 0.2), winGlassMat);
-    wPane.position.set(wx, 2.95, doorFaceZ);
-    group.add(wFrame, wPane);
-  });
-
-  [-5.02, 5.02].forEach((sx) => {
-    [-1.6, 1.6].forEach((sz) => {
-      const swFrame = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.6, 1.6), frameMat);
-      swFrame.position.set(sx, 2.95, sz);
-      const swPane = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.32, 1.32), winGlassMat);
-      swPane.position.set(sx, 2.95, sz);
-      group.add(swFrame, swPane);
-    });
-  });
-
-  const signSprite = createLabelSprite(spec.name, 0, 7.65, 0, 1.15);
-  group.add(signSprite);
-
-  return {
-    group,
-    collider: { x: spec.x, z: spec.z, hw: 5.3, hd: 4.3 },
-  };
 }
 
 function buildCompositeTree(x: number, z: number, scale: number, tintVariant: number): THREE.Group {
@@ -630,9 +555,10 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
 
   const meadowTex = createMeadowTexture(maxAnisotropy);
   const pavingTex = createPavingTexture(maxAnisotropy);
+  const detailTextures = createCampusDetailTextures(maxAnisotropy);
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(180, 180),
+    new THREE.PlaneGeometry(1400, 1400),
     new THREE.MeshStandardMaterial({ map: meadowTex, roughness: 0.94, metalness: 0.02 })
   );
   ground.rotation.x = -Math.PI / 2;
@@ -640,11 +566,17 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
   campusGroup.add(ground);
 
   const pathMat = new THREE.MeshStandardMaterial({ map: pavingTex, roughness: 0.85, metalness: 0.04 });
+  const spurPathMat = new THREE.MeshStandardMaterial({
+    map: detailTextures.cobblePaver,
+    roughness: 0.84,
+    metalness: 0.04,
+  });
   const curbMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.88, metalness: 0.05 });
 
+  // Main Cross Avenues
   [
-    [46, 5.2],
-    [5.2, 46],
+    [48, 5.2],
+    [5.2, 48],
   ].forEach(([w, d]) => {
     const curb = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.04, d + 0.4), curbMat);
     curb.position.y = 0.02;
@@ -658,30 +590,59 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
     campusGroup.add(path);
   });
 
-  const plazaPad = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.5, 0.05, 32), pathMat);
-  plazaPad.position.y = 0.03;
+  // Paved Spur Walkways connecting E-W Avenue directly to each Building's Portico Steps
+  CAMPUS_ROOMS.forEach((room) => {
+    const spurCenterZ = room.facingSign > 0 ? -5.6 : 5.6;
+    const spurLen = 6.2;
+    const spurWidth = 2.9;
+
+    const spurCurb = new THREE.Mesh(new THREE.BoxGeometry(spurWidth + 0.36, 0.038, spurLen), curbMat);
+    spurCurb.position.set(room.doorX, 0.019, spurCenterZ);
+    spurCurb.receiveShadow = true;
+    campusGroup.add(spurCurb);
+
+    const spurPath = new THREE.Mesh(new THREE.PlaneGeometry(spurWidth, spurLen), spurPathMat);
+    spurPath.rotation.x = -Math.PI / 2;
+    spurPath.position.set(room.doorX, 0.048, spurCenterZ);
+    spurPath.receiveShadow = true;
+    campusGroup.add(spurPath);
+  });
+
+  // Central Quad Plaza with Compass Medallion Inlay
+  const plazaPad = new THREE.Mesh(
+    new THREE.CylinderGeometry(4.65, 4.75, 0.05, 40),
+    new THREE.MeshStandardMaterial({
+      map: detailTextures.plazaMedallion,
+      roughness: 0.82,
+      metalness: 0.05,
+    })
+  );
+  plazaPad.position.y = 0.035;
   plazaPad.receiveShadow = true;
   campusGroup.add(plazaPad);
 
-  const plazaTrim = new THREE.Mesh(new THREE.TorusGeometry(4.45, 0.12, 8, 48), curbMat);
+  const plazaTrim = new THREE.Mesh(new THREE.TorusGeometry(4.7, 0.13, 10, 48), curbMat);
   plazaTrim.rotation.x = Math.PI / 2;
-  plazaTrim.position.y = 0.06;
+  plazaTrim.position.y = 0.065;
   campusGroup.add(plazaTrim);
 
-  // 4 Buildings + Entrances
+  // 4 Detailed Buildings + Entrances
   const outdoorColliders: BoxCollider[] = [];
   const outdoorCameraObstacles: CameraBox[] = [];
   const entrances: BuildingEntrance[] = [];
 
   CAMPUS_ROOMS.forEach((room) => {
-    const built = buildCompositeBuilding(room);
+    const built = buildDetailedBuilding(room, detailTextures);
+    const signSprite = createLabelSprite(room.name, 0, 10.35, 0, 1.15);
+    built.group.add(signSprite);
+
     campusGroup.add(built.group);
-    outdoorColliders.push(built.collider);
+    outdoorColliders.push(built.collider, ...built.accentColliders);
     outdoorCameraObstacles.push({
       minX: room.x - 5.65,
       maxX: room.x + 5.65,
       minY: 0,
-      maxY: 6.75,
+      maxY: 8.6,
       minZ: room.z - 4.65,
       maxZ: room.z + 4.65,
     });
@@ -769,40 +730,146 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
     });
   });
 
-  // Perimeter Fence & Trees
-  const postMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85, metalness: 0.1 });
-  const railMat = new THREE.MeshStandardMaterial({ color: 0x785b42, roughness: 0.88, metalness: 0.04 });
-  [-25.5, 25.5].forEach((edge) => {
-    for (let p = -24; p <= 24; p += 6) {
-      const postX = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.05, 0.32), postMat);
-      postX.position.set(p, 0.525, edge);
-      postX.castShadow = true;
-      const postZ = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.05, 0.32), postMat);
-      postZ.position.set(edge, 0.525, p);
-      postZ.castShadow = true;
-      campusGroup.add(postX, postZ);
-    }
-    const railH = new THREE.Mesh(new THREE.BoxGeometry(51, 0.1, 0.1), railMat);
-    railH.position.set(0, 0.72, edge);
-    const railV = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 51), railMat);
-    railV.position.set(edge, 0.72, 0);
-    campusGroup.add(railH, railV);
+  // Warm Street Lamp Posts (plaza corners + main avenues)
+  const lampCoords: [number, number][] = [
+    [-3.75, -3.75],
+    [3.75, -3.75],
+    [-3.75, 3.75],
+    [3.75, 3.75],
+    [-3.2, -11.2],
+    [3.2, -11.2],
+    [-3.2, 11.2],
+    [3.2, 11.2],
+    [-10.6, -3.2],
+    [10.6, -3.2],
+    [-10.6, 3.2],
+    [10.6, 3.2],
+    [-19.2, -3.2],
+    [19.2, -3.2],
+    [-19.2, 3.2],
+    [19.2, 3.2],
+  ];
+  lampCoords.forEach(([lx, lz]) => {
+    const built = buildLampPost(lx, lz);
+    campusGroup.add(built.group);
+    outdoorColliders.push(built.collider);
   });
 
-  for (let i = 0; i < 38; i += 1) {
+  // Park Benches along Avenues & Inner Quad
+  const benchSpecs: [number, number, number][] = [
+    [-6.6, -3.55, 0],
+    [6.6, -3.55, 0],
+    [-6.6, 3.55, Math.PI],
+    [6.6, 3.55, Math.PI],
+    [-3.6, -15.5, -Math.PI / 2],
+    [3.6, -15.5, Math.PI / 2],
+    [-3.6, 15.5, -Math.PI / 2],
+    [3.6, 15.5, Math.PI / 2],
+  ];
+  benchSpecs.forEach(([bx, bz, rotY]) => {
+    const built = buildParkBench(bx, bz, rotY);
+    campusGroup.add(built.group);
+    outdoorColliders.push(built.collider);
+  });
+
+  // Flowering Planter Hedges framing Building Forecourts & Walkways
+  const planterSpecs: [number, number, number, number][] = [
+    [-11.2, -3.35, 2.2, 0.72],
+    [-16.8, -3.35, 2.2, 0.72],
+    [11.2, -3.35, 2.2, 0.72],
+    [16.8, -3.35, 2.2, 0.72],
+    [-11.2, 3.35, 2.2, 0.72],
+    [-16.8, 3.35, 2.2, 0.72],
+    [11.2, 3.35, 2.2, 0.72],
+    [16.8, 3.35, 2.2, 0.72],
+    [-5.8, -7.2, 0.78, 2.6],
+    [5.8, -7.2, 0.78, 2.6],
+    [-5.8, 7.2, 0.78, 2.6],
+    [5.8, 7.2, 0.78, 2.6],
+  ];
+  planterSpecs.forEach(([px, pz, pw, pd]) => {
+    const built = buildPlanterHedge(px, pz, pw, pd);
+    campusGroup.add(built.group);
+    outdoorColliders.push(built.collider);
+  });
+
+  // Perimeter Stone-and-Wood Fence with Open Avenue Gateways & Lantern Piers
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85, metalness: 0.1 });
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x785b42, roughness: 0.88, metalness: 0.04 });
+
+  [-25.5, 25.5].forEach((edge) => {
+    // Posts along segmented fence (leave [-3..3] open for avenue gate)
+    [-25.5, -20, -14.5, -9, -3.2, 3.2, 9, 14.5, 20, 25.5].forEach((p) => {
+      if (Math.abs(p) > 3.5) {
+        const postX = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.1, 0.34), postMat);
+        postX.position.set(p, 0.55, edge);
+        postX.castShadow = true;
+        campusGroup.add(postX);
+
+        const postZ = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.1, 0.34), postMat);
+        postZ.position.set(edge, 0.55, p);
+        postZ.castShadow = true;
+        campusGroup.add(postZ);
+      }
+    });
+
+    // Two fence wings per side leaving the 6.4m central avenue gateway open
+    [-14.35, 14.35].forEach((mid) => {
+      const wingLen = 22.3;
+      const railHTop = new THREE.Mesh(new THREE.BoxGeometry(wingLen, 0.11, 0.11), railMat);
+      railHTop.position.set(mid, 0.82, edge);
+      const railHLow = new THREE.Mesh(new THREE.BoxGeometry(wingLen, 0.09, 0.09), railMat);
+      railHLow.position.set(mid, 0.44, edge);
+
+      const railVTop = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, wingLen), railMat);
+      railVTop.position.set(edge, 0.82, mid);
+      const railVLow = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, wingLen), railMat);
+      railVLow.position.set(edge, 0.44, mid);
+      campusGroup.add(railHTop, railHLow, railVTop, railVLow);
+    });
+
+    // Cardinal Stone Gate Piers flanking the Avenue Entrance
+    [-3.1, 3.1].forEach((gp) => {
+      const pierNS = buildGatePillar(gp, edge);
+      const pierEW = buildGatePillar(edge, gp);
+      campusGroup.add(pierNS.group, pierEW.group);
+      outdoorColliders.push(pierNS.collider, pierEW.collider);
+    });
+  });
+
+  // Accent Quad Trees + Lush Surrounding Valley Woodland (Mix of Pine & Broadleaf)
+  const quadTrees: [number, number, number][] = [
+    [-6.5, -19.5, 0.96],
+    [6.5, -19.5, 1.02],
+    [-6.5, 19.5, 1.0],
+    [6.5, 19.5, 0.94],
+    [-22.2, -9.2, 0.95],
+    [22.2, -9.2, 1.04],
+    [-22.2, 9.2, 1.0],
+    [22.2, 9.2, 0.95],
+  ];
+  quadTrees.forEach(([tx, tz, scale], idx) => {
+    const tree =
+      idx % 2 === 0
+        ? buildBroadleafTree(tx, tz, scale, idx)
+        : buildCompositeTree(tx, tz, scale, idx);
+    campusGroup.add(tree);
+    outdoorColliders.push({ x: tx, z: tz, hw: 0.45 * scale, hd: 0.45 * scale });
+  });
+
+  for (let i = 0; i < 46; i += 1) {
     const angle = i * 2.39996;
-    const radius = i < 14 ? 19 + (i % 4) * 1.8 : 28 + (i % 5) * 3.5;
+    const radius = 29 + (i % 7) * 4.2;
     const tx = Math.cos(angle) * radius;
     const tz = Math.sin(angle) * radius;
-    if (Math.abs(tx) < 6.8 || Math.abs(tz) < 6.8) continue;
-    if (Math.abs(Math.abs(tx) - 14) < 7.6 && Math.abs(Math.abs(tz) - 14) < 6.6) continue;
-    // Keep trees clear of the perimeter fence line
-    if (Math.abs(Math.abs(tx) - 25.5) < 1.6 || Math.abs(Math.abs(tz) - 25.5) < 1.6) continue;
-    const scale = 0.85 + ((i * 37) % 30) / 100;
-    campusGroup.add(buildCompositeTree(tx, tz, scale, i));
-    if (Math.abs(tx) < 24.5 && Math.abs(tz) < 24.5) {
-      outdoorColliders.push({ x: tx, z: tz, hw: 0.42 * scale, hd: 0.42 * scale });
-    }
+    // Keep cardinal avenue sightlines open toward the distant mountains
+    if (Math.abs(tx) < 5.6 || Math.abs(tz) < 5.6) continue;
+    const scale = 0.95 + ((i * 37) % 35) / 100;
+    const tree =
+      i % 3 === 0
+        ? buildBroadleafTree(tx, tz, scale, i)
+        : buildCompositeTree(tx, tz, scale, i);
+    campusGroup.add(tree);
   }
 
   // Room Interior Group (hidden initially until entering a building)
@@ -820,6 +887,7 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
     dispose: () => {
       meadowTex.dispose();
       pavingTex.dispose();
+      detailTextures.dispose();
       scene.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
@@ -834,3 +902,74 @@ export function buildCampusWorld(scene: THREE.Scene, maxAnisotropy: number): Cam
     },
   };
 }
+
+export async function loadMountainBackground(
+  campusGroup: THREE.Group,
+  isCancelled?: () => boolean
+): Promise<THREE.Group | null> {
+  const base = import.meta.env.BASE_URL || '/';
+  const candidates = Array.from(
+    new Set([`${base}assets/mountain-background.obj`, '/assets/mountain-background.obj'])
+  );
+
+  let objText: string | null = null;
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (text.trimStart().startsWith('<!') || !text.includes('v ')) continue;
+      objText = text;
+      break;
+    } catch {
+      // try next candidate
+    }
+  }
+
+  if (!objText || isCancelled?.()) return null;
+
+  const loader = new OBJLoader();
+  const mountainGroup = loader.parse(objText);
+  if (isCancelled?.()) return null;
+
+  const rockyMat = new THREE.MeshStandardMaterial({
+    color: 0x676e78,
+    roughness: 0.94,
+    metalness: 0.04,
+  });
+  const snowyMat = new THREE.MeshStandardMaterial({
+    color: 0xf1f5f9,
+    roughness: 0.78,
+    metalness: 0.02,
+  });
+  const grassyMat = new THREE.MeshStandardMaterial({
+    color: 0x558349,
+    roughness: 0.91,
+    metalness: 0.02,
+  });
+
+  mountainGroup.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+
+    const name = `${mesh.name} ${Array.isArray(mesh.material) ? mesh.material.map((m) => m.name).join(' ') : (mesh.material?.name ?? '')}`;
+    if (/Snowy/i.test(name)) {
+      mesh.material = snowyMat;
+    } else if (/Grassy/i.test(name)) {
+      mesh.material = grassyMat;
+    } else {
+      mesh.material = rockyMat;
+    }
+  });
+
+  // Center the OBJ's open valley (-50, 100) at campus origin (0, 0) and embed base skirt cleanly below y = 0
+  const scale = 0.52;
+  mountainGroup.scale.setScalar(scale);
+  mountainGroup.position.set(50 * scale, -7.5, -100 * scale);
+  campusGroup.add(mountainGroup);
+
+  return mountainGroup;
+}
+

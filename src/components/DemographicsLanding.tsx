@@ -35,7 +35,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
       return;
     }
     if (!section.trim()) {
-      setErrorMsg('Please enter your class or section.');
+      setErrorMsg('Please enter your course and section.');
       return;
     }
     if (!consented) {
@@ -108,7 +108,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
 
             <div>
               <label htmlFor="demo-section" className="block text-xs font-semibold text-slate-700 mb-1 lg:mb-1.5">
-                Section <span className="text-rose-600">*</span>
+                Course &amp; Section <span className="text-rose-600">*</span>
               </label>
               <input
                 id="demo-section"
@@ -118,7 +118,7 @@ export const DemographicsLanding: React.FC<DemographicsLandingProps> = ({
                   setSection(e.target.value);
                   if (errorMsg) setErrorMsg(null);
                 }}
-                placeholder="e.g. BSCS 3A / STEM-11"
+                placeholder="e.g. BSIT 11001"
                 maxLength={60}
                 required
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 lg:px-3.5 lg:py-2.5 text-xs lg:text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/20"

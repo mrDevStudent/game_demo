@@ -127,7 +127,7 @@ export function buildQuestReportSvg(record: QuestArchiveRecord): string {
   <!-- Demographics & KPI Row -->
   <rect x="44" y="136" width="510" height="116" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
   <text x="64" y="160" font-size="11" font-weight="700" fill="#64748b">PARTICIPANT METADATA</text>
-  <text x="64" y="184" font-size="13" fill="#0f172a"><tspan font-weight="700">Section:</tspan> ${escapeXml(record.demographics.section)}   <tspan font-weight="700">Age:</tspan> ${record.demographics.age}</text>
+  <text x="64" y="184" font-size="13" fill="#0f172a"><tspan font-weight="700">Course &amp; Section:</tspan> ${escapeXml(record.demographics.section)}   <tspan font-weight="700">Age:</tspan> ${record.demographics.age}</text>
   <text x="64" y="206" font-size="13" fill="#0f172a"><tspan font-weight="700">Gender / Avatar:</tspan> ${escapeXml(record.demographics.gender)} (${escapeXml(record.character)})</text>
   <text x="64" y="228" font-size="11.5" fill="#475569">Submitted: ${escapeXml(createdDate)}${record.editedBy ? ` · Edited by ${escapeXml(record.editedBy)}` : ''}</text>
 
@@ -236,7 +236,7 @@ export function buildArchiveCohortSvg(records: QuestArchiveRecord[]): string {
   <rect x="32" y="104" width="976" height="26" rx="6" fill="#1e293b"/>
   <text x="48" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">CODE</text>
   <text x="150" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">PARTICIPANT</text>
-  <text x="340" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">SECTION</text>
+  <text x="340" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">COURSE &amp; SECTION</text>
   <text x="490" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">AGE / GENDER</text>
   <text x="615" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">TIME</text>
   <text x="705" y="121" font-size="10.5" font-weight="700" fill="#f8fafc">DIST</text>

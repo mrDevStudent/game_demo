@@ -257,7 +257,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
       return;
     }
     if (!draftSection.trim()) {
-      setEditError('Section cannot be empty.');
+      setEditError('Course & section cannot be empty.');
       return;
     }
 
@@ -463,7 +463,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search code, name, section…"
+                    placeholder="Search code, name, course & section…"
                     className="w-full rounded-lg border border-slate-300 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-blue-600 focus:outline-none"
                   />
                 </div>
@@ -709,12 +709,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ open, onClose })
 
                         <div>
                           <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                            Section
+                            Course &amp; Section
                           </label>
                           <input
                             type="text"
                             value={draftSection}
                             maxLength={60}
+                            placeholder="e.g. BSIT 11001"
                             onChange={(e) => setDraftSection(e.target.value)}
                             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
                           />
