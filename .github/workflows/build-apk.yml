@@ -17,8 +17,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - run: npm install
-      - run: npm install @capacitor/core @capacitor/cli @capacitor/android
+      - name: Fix esbuild version for Vite 8
+        run: npm install --save-dev esbuild@^0.28.0
+      - name: Install Capacitor
+        run: npm install @capacitor/core @capacitor/android && npm install --save-dev @capacitor/cli
       - run: npm run build
       - name: Add Android
         run: |
@@ -26,8 +28,3 @@ jobs:
           [ -d android ] || npx cap add android
           npx cap sync android
       - name: Build APK
-        run: cd android && ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: android/app/build/outputs/apk/debug/*.apk
