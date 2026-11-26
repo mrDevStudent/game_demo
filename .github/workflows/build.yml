@@ -24,4 +24,12 @@ jobs:
       - run: npm run build
       - name: Add Android
         run: |
-          [ -f capacitor.config.json ] || [ -f capacitor.config.ts ] || npx cap init "Game Demo" com.
+          rm -f capacitor.config.json capacitor.config.ts capacitor.config.js
+          npx cap init "Game Demo" "com.mrdevstudent.gamedemo" --web-dir=dist
+          [ -d android ] || npx cap add android
+          npx cap sync android
+      - name: Build APK
+        run: cd android && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
